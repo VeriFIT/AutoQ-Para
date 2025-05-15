@@ -8,7 +8,7 @@ on the C++ implementation located in `src/`.
 ## C++ implementation - tasks:
 
 ### Test suite
-- [ ] ACNs - test scaling during addition
+- [x] ACNs - test scaling during addition
 - [ ] ACN Matrix - test row insertion into row-echelon matrix
 
 ### Features
