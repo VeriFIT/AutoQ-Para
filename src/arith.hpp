@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <iostream>
 #include <ostream>
+#include <vector>
 
 typedef int64_t  s64;
 typedef uint64_t u64;
@@ -192,30 +193,30 @@ struct ACN_Matrix {
             }
         }
 
-        return this->width + 1;
+        return this->width;
     }
 
     void insert_row_at(const ACN_Matrix& row, u64 row_idx, bool skip_shifting_subsequent_rows = false) {
         assert(row.width == this->width);
 
         if (!skip_shifting_subsequent_rows) {
-            u64 last_elem_idx  = (this->height - 1) * this->width - 1;
-            u64 first_elem_idx = row_idx * this->width;
+            s64 last_elem_idx  = (this->height - 1) * this->width - 1;
+            s64 first_elem_idx = row_idx * this->width;
 
-            for (u64 elem_idx = last_elem_idx; elem_idx >= first_elem_idx; elem_idx--) {
+            for (s64 elem_idx = last_elem_idx; elem_idx >= first_elem_idx; elem_idx--) {
                 this->data[elem_idx + this->width] = this->data[elem_idx];
             }
         }
 
         for (u64 elem_idx = 0; elem_idx < row.width; elem_idx++) {
-            this->data[row_idx*this->width] = row.at(0, elem_idx);
+            this->data[row_idx*this->width + elem_idx] = row.at(0, elem_idx);
         }
     }
 
     void subtract_from_ith_row(u64 row_idx, Algebraic_Complex_Number& row_coef, ACN_Matrix& rows_to_subtract, u64 row_to_subtract_idx, Algebraic_Complex_Number& row_to_subtract_coef) const {
         for (u64 elem_idx = 0; elem_idx < this->width; elem_idx++) {
             auto subtractee_weighted = this->at(row_idx, elem_idx) * row_coef;
-            auto subtractor_weighted = rows_to_subtract.at(row_idx, elem_idx) * row_to_subtract_coef;
+            auto subtractor_weighted = rows_to_subtract.at(row_to_subtract_idx, elem_idx) * row_to_subtract_coef;
             auto result_elem = subtractee_weighted - subtractor_weighted;
 
             this->data[row_idx*this->width + elem_idx] = result_elem;
@@ -227,4 +228,8 @@ struct ACN_Matrix {
     }
 };
 
+std::ostream& operator<<(std::ostream& os, const ACN_Matrix& matrix);
+
 s64 add_row_to_row_echelon_matrix(ACN_Matrix& matrix, ACN_Matrix& row);
+ACN_Matrix square_acn_matrix_from_ints(const std::vector<s64>& ints);
+ACN_Matrix row_from_ints(const std::vector<s64>& row_data);

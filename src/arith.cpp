@@ -60,7 +60,9 @@ s64 add_row_to_row_echelon_matrix(ACN_Matrix& matrix, ACN_Matrix& row) {
         // Subtract the current matrix row and continue;
         auto& matrix_pivot = matrix.at(row_idx, row_pivot_idx);
         auto& row_pivot    = row.at(0, inserted_row_pivot_idx);
+
         row.subtract_from_ith_row(0, matrix_pivot, matrix, row_idx, row_pivot);
+
         inserted_row_pivot_idx = row.find_nonzero_elem_in_row(0);
 
         if (inserted_row_pivot_idx >= row.width) {
@@ -83,7 +85,27 @@ ACN_Matrix square_acn_matrix_from_ints(const std::vector<s64>& ints) {
     u64 dim = compute_square_matrix_dim_from_1d_repr(ints);
 
     ACN_Matrix result = {.height = dim, .width = dim, .data = nullptr};
+    Algebraic_Complex_Number* matrix_slots = new Algebraic_Complex_Number[dim*dim];
 
+    for (u64 elem_idx = 0; elem_idx < ints.size(); elem_idx++) {
+        s64 elem_int_value = ints[elem_idx];
+        matrix_slots[elem_idx] = {.a = elem_int_value, .b = 0, .c = 0, .d = 0, .k = 0};
+    }
+
+    result.data = matrix_slots;
+    return result;
+}
+
+ACN_Matrix row_from_ints(const std::vector<s64>& row_data) {
+    ACN_Matrix result = {.height = 1, .width = row_data.size(), .data = nullptr};
+    Algebraic_Complex_Number* matrix_slots = new Algebraic_Complex_Number[row_data.size()];
+
+    for (u64 elem_idx = 0; elem_idx < row_data.size(); elem_idx++) {
+        s64 elem_int_value = row_data[elem_idx];
+        matrix_slots[elem_idx] = {.a = elem_int_value, .b = 0, .c = 0, .d = 0, .k = 0};
+    }
+
+    result.data = matrix_slots;
     return result;
 }
 
@@ -146,3 +168,18 @@ std::ostream& operator<<(std::ostream& os, const Direct_ACN& number) {
 
     return os;
 }
+
+
+std::ostream& operator<<(std::ostream& os, const ACN_Matrix& matrix) {
+    os << "[\n";
+    for (u64 row_idx = 0; row_idx < matrix.height; row_idx++) {
+        for (u64 col_idx = 0; col_idx < matrix.width; col_idx++) {
+            os << matrix.at(row_idx, col_idx) << ", ";
+        }
+        os << "\n";
+    }
+    os << "]";
+
+    return os;
+}
+

@@ -101,5 +101,44 @@ TEST_CASE( "Conversion into direct representation", "[Algebraic complex numbers]
 }
 
 TEST_CASE( "Add row to a row-echelon-form matrix", "[ACN Matrix]") {
-    ACN_Matrix matrix;
+    {
+        ACN_Matrix matrix = square_acn_matrix_from_ints({
+            0, 0, 0,
+            0, 0, 0,
+            0, 0, 0,
+        });
+        ACN_Matrix row = row_from_ints({1, 0, 0});
+
+        s64 row_slot_idx        = add_row_to_row_echelon_matrix(matrix, row);
+        s64 subsequent_slot_idx = add_row_to_row_echelon_matrix(matrix, row);
+
+        REQUIRE(row_slot_idx == 0);
+        REQUIRE(subsequent_slot_idx == -1);
+    }
+
+    {
+        ACN_Matrix matrix = square_acn_matrix_from_ints({
+            1, 0, 0,
+            0, 1, 0,
+            0, 0, 1,
+        });
+        ACN_Matrix row = row_from_ints({1, 2, 3});
+
+        s64 row_slot_idx = add_row_to_row_echelon_matrix(matrix, row);
+
+        REQUIRE(row_slot_idx == -1);
+    }
+
+    {
+        ACN_Matrix matrix = square_acn_matrix_from_ints({
+            1, 0, 0,
+            0, 3, 0,
+            0, 0, 8,
+        });
+        ACN_Matrix row = row_from_ints({1, 2, 0});
+
+        s64 row_slot_idx = add_row_to_row_echelon_matrix(matrix, row);
+
+        REQUIRE(row_slot_idx == -1);
+    }
 }
