@@ -3,6 +3,7 @@
 #include <cassert>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <iostream>
 #include <ostream>
 #include <vector>
@@ -149,6 +150,24 @@ struct ACN_Matrix {
     u64 height, width;
     Algebraic_Complex_Number* data = nullptr;
 
+    ACN_Matrix(u64 height, u64 width, Algebraic_Complex_Number* data_ptr = nullptr) : height(height), width(width), data(data_ptr) {}
+
+    ACN_Matrix(const ACN_Matrix& other) {
+        this->width  = other.width;
+        this->height = other.height;
+
+        this->data   = new Algebraic_Complex_Number[this->width*this->height];
+        std::memcpy(this->data, other.data, this->width*this->height*sizeof(Algebraic_Complex_Number));
+    }
+
+    ACN_Matrix(ACN_Matrix&& other) {
+        this->width  = other.width;
+        this->height = other.height;
+
+        this->data = other.data;
+        other.data = nullptr;
+    }
+
     ACN_Matrix operator*(const ACN_Matrix& other) const {
         assert(this->width == other.height);
 
@@ -172,11 +191,7 @@ struct ACN_Matrix {
             }
         }
 
-        return ACN_Matrix {
-            .height = result_height,
-            .width  = result_width,
-            .data   = result_data
-        };
+        return ACN_Matrix(result_height, result_width, result_data);
     }
 
     Algebraic_Complex_Number& at(u64 row_idx, u64 col_idx) const {

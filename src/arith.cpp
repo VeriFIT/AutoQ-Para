@@ -84,7 +84,7 @@ u64 compute_square_matrix_dim_from_1d_repr(const std::vector<s64>& repr) {
 ACN_Matrix square_acn_matrix_from_ints(const std::vector<s64>& ints) {
     u64 dim = compute_square_matrix_dim_from_1d_repr(ints);
 
-    ACN_Matrix result = {.height = dim, .width = dim, .data = nullptr};
+    ACN_Matrix result(dim, dim);
     Algebraic_Complex_Number* matrix_slots = new Algebraic_Complex_Number[dim*dim];
 
     for (u64 elem_idx = 0; elem_idx < ints.size(); elem_idx++) {
@@ -97,7 +97,7 @@ ACN_Matrix square_acn_matrix_from_ints(const std::vector<s64>& ints) {
 }
 
 ACN_Matrix row_from_ints(const std::vector<s64>& row_data) {
-    ACN_Matrix result = {.height = 1, .width = row_data.size(), .data = nullptr};
+    ACN_Matrix result(1, row_data.size());
     Algebraic_Complex_Number* matrix_slots = new Algebraic_Complex_Number[row_data.size()];
 
     for (u64 elem_idx = 0; elem_idx < row_data.size(); elem_idx++) {
