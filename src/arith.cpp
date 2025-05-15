@@ -75,7 +75,7 @@ u64 compute_square_matrix_dim_from_1d_repr(const std::vector<s64>& repr) {
     u64 dimension = static_cast<s64>(std::sqrt(repr.size()));
 
     assert(dimension*dimension == repr.size());
-    
+
     return dimension;
 }
 
@@ -139,9 +139,9 @@ std::ostream& operator<<(std::ostream& os, const Direct_ACN& number) {
 
     os << "("
        << number.a
-       << b_sign << number.b << "*(1/sqrt(2))"
-       << c_sign << number.c << "*i"
-       << d_sign << number.d << "*(1/sqrt(2))*i"
+       << b_sign << std::abs(number.b) << "*/sqrt(2)"
+       << c_sign << std::abs(number.c) << "*i"
+       << d_sign << std::abs(number.d) << "*i/sqrt(2)"
        << ") * (1/2)^(" << number.k << ")";
 
     return os;

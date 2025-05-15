@@ -3,6 +3,7 @@
 #include <cassert>
 #include <cmath>
 #include <cstdint>
+#include <iostream>
 #include <ostream>
 
 typedef int64_t  s64;
@@ -40,18 +41,23 @@ struct Algebraic_Complex_Number {
         s64 half_scale = scale_difference / 2;
 
         Algebraic_Complex_Number rescaled = { // First multiply by (sqrt(2))^2k
-            .a = this->a * (1u << half_scale),
-            .b = this->b * (1u << half_scale),
-            .c = this->c * (1u << half_scale),
-            .d = this->d * (1u << half_scale),
+            .a = this->a << half_scale,
+            .b = this->b << half_scale,
+            .c = this->c << half_scale,
+            .d = this->d << half_scale,
             .k = larger_k
         };
 
         if (scale_difference % 2) { // Multiply by sqrt(2) if needed
-            rescaled.a = rescaled.b - rescaled.d;
-            rescaled.b = rescaled.a + rescaled.c;
-            rescaled.c = rescaled.b + rescaled.d;
-            rescaled.d = rescaled.c - rescaled.a;
+            s64 new_a = -rescaled.b - rescaled.d;
+            s64 new_b = rescaled.a + rescaled.c;
+            s64 new_c = rescaled.b + rescaled.d;
+            s64 new_d = rescaled.c - rescaled.a;
+
+            rescaled.a = new_a;
+            rescaled.b = new_b;
+            rescaled.c = new_c;
+            rescaled.d = new_d;
         }
 
         return rescaled;
@@ -116,6 +122,8 @@ struct Algebraic_Complex_Number {
         return {.real = real, .im = im};
     }
 };
+
+std::ostream& operator<<(std::ostream& os, const Algebraic_Complex_Number& number);
 
 Algebraic_Complex_Number acn_zero();
 

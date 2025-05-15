@@ -23,19 +23,51 @@ TEST_CASE( "Multiplication comutativity", "[Algebraic complex numbers]" ) {
 }
 
 TEST_CASE( "Scaling during addition", "[Algebraic complex numbers]" ) {
+    {
+        // Represents: 1 + 2/sqrt(2) + 2*i/sqrt(2)
+        Algebraic_Complex_Number left  = {.a = 1, .b = 2, .c = 0, .d = 0, .k = 0};
 
-    // Represents: 1 + -2/sqrt(2) + 3i + 6i/sqrt(2)
-    Algebraic_Complex_Number left  = {.a = 1, .b = 2, .c = 3, .d = 4, .k = 0};
+        // Represents: -10 -8/sqrt(2) - 10*i
+        Algebraic_Complex_Number right = {.a = -2, .b = -5, .c = 0, .d = 0, .k = -2};
 
-    // Represents: (-1 - 2/sqrt(2) - 4i - 2i/sqrt(2)) * 4
-    Algebraic_Complex_Number right = {.a = -2, .b = -5, .c = 2, .d = -3, .k = -3};
+        Algebraic_Complex_Number result = left + right;
+        Direct_ACN direct_result = convert_acn_into_direct_repr(result);
 
-    Algebraic_Complex_Number result = left+right;
-    Direct_ACN direct_result = convert_acn_into_direct_repr(result);
+        // Result should be  -9 - 6/sqrt(2) - 10i + 2i/sqrt(2)
+        Direct_ACN expected = {-3, -8, 0, -8, 0};
+        REQUIRE(direct_result == expected);
+    }
 
-    // Result should be  -3 - 10/sqrt(2) - 13i -2i/sqrt(2)
-    Direct_ACN expected = {-3, -10, -13, -2};
-    REQUIRE(direct_result == expected);
+    {
+        // Represents: 1 + 2/sqrt(2) + 2*i/sqrt(2)
+        Algebraic_Complex_Number left  = {.a = 1, .b = 2, .c = 0, .d = 0, .k = 0};
+
+        Algebraic_Complex_Number right = {.a = -2, .b = -5, .c = 0, .d = 0, .k = -3};
+
+        Algebraic_Complex_Number result = left + right;
+
+        REQUIRE(result.a == 11);
+        REQUIRE(result.b == -2);
+        REQUIRE(result.c == -10);
+        REQUIRE(result.d == 4);
+        REQUIRE(result.k == 0);
+    }
+
+    {
+        // Represents: 1 + 2/sqrt(2) + 2*i/sqrt(2) + 1*i
+        Algebraic_Complex_Number left  = {.a = 1, .b = 2, .c = 1, .d = 0, .k = 0};
+
+        // Represents: -7 -4/sqrt(2) -7i/sqrt(2)
+        Algebraic_Complex_Number right = {.a = -2, .b = -5, .c = 0, .d = 2, .k = -1};
+
+        Algebraic_Complex_Number result = left + right;
+
+        REQUIRE(result.a == 4);
+        REQUIRE(result.b == 0);
+        REQUIRE(result.c == -2);
+        REQUIRE(result.d == 2);
+        REQUIRE(result.k == 0);
+    }
 }
 
 TEST_CASE( "Conversion into direct representation", "[Algebraic complex numbers]") {
@@ -66,4 +98,8 @@ TEST_CASE( "Conversion into direct representation", "[Algebraic complex numbers]
         Direct_ACN expected_result = {-1, -2, -4, 2, -2};
         REQUIRE(expected_result == direct_repr);
     }
+}
+
+TEST_CASE( "Add row to a row-echelon-form matrix", "[ACN Matrix]") {
+    ACN_Matrix matrix;
 }
