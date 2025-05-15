@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <new>
 #include <ostream>
+#include <iostream>
 
 #include "arith.hpp"
 
@@ -150,4 +151,63 @@ s64 add_row_to_row_echelon_matrix(ACN_Matrix& matrix, ACN_Matrix& row) {
     }
 
     assert(false);  // Should be unreachable - the row is indepentent and we insert it, or our matrix has full rank and hence we do not insert it
+}
+
+Direct_ACN convert_acn_into_direct_repr(const Algebraic_Complex_Number& number) {
+    if (number.is_zero()) {
+        return {}; // All zeros
+    }
+
+    s64 a = number.a;
+    s64 b = number.b - number.d;
+    s64 c = number.c;
+    s64 d = number.b + number.d;
+
+    s64 k = number.k / 2;
+
+    if (number.k % 2) {
+        k += (number.k > 0);  // We want to avoid dividing integers, so in case the number is small, we make it scaling factor even smaller so we do not divide by 1/2
+
+        // Multiply everything by 2/sqrt(2)
+        s64 new_a = b;
+        s64 new_b = 2*a;
+        s64 new_c = d;
+        s64 new_d = 2*c;
+
+        a = new_a;
+        b = new_b;
+        c = new_c;
+        d = new_d;
+    }
+
+    // Count trailing zeros to normalize K
+    s64 product = a | b | c | d;
+    u64 trailing_zeros = 0;
+    while (!(product % 2)) { // Until the last bit is 1
+        trailing_zeros += 1;
+        product = product >> 1;
+    }
+
+    a = a >> trailing_zeros;
+    b = b >> trailing_zeros;
+    c = c >> trailing_zeros;
+    d = d >> trailing_zeros;
+    k = k - trailing_zeros;
+
+    return {.a = a, .b = b, .c = c, .d = d, .k = k};
+}
+
+std::ostream& operator<<(std::ostream& os, const Direct_ACN& number) {
+    const char* b_sign = number.b < 0 ? " - " : " + ";
+    const char* c_sign = number.c < 0 ? " - " : " + ";
+    const char* d_sign = number.d < 0 ? " - " : " + ";
+
+    os << "("
+       << number.a
+       << b_sign << number.b << "*(1/sqrt(2))"
+       << c_sign << number.c << "*i"
+       << d_sign << number.d << "*(1/sqrt(2))*i"
+       << ") * (1/2)^(" << number.k << ")";
+
+    return os;
 }

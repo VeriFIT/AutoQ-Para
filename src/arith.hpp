@@ -116,3 +116,22 @@ struct Algebraic_Complex_Number {
         return {.real = real, .im = im};
     }
 };
+
+/**
+ * Represents a complex number as:
+ *    (1/2)^k * (a + b*(1/sqrt(2)) + i*c + i*d*(1/sqrt(2)))
+ * Note: The scaling factor k is necessary, without it we cannot represent arbitrary small/large numbers
+ */
+struct Direct_ACN {
+    s64 a, b, c, d, k;
+
+    bool operator==(const Direct_ACN& other) const {
+        return (this->a == other.a) && (this->b == other.b) && (this->c == other.c) && (this->d == other.d) && (this->k == other.k);
+    }
+};
+
+std::ostream& operator<<(std::ostream& os, const Direct_ACN& number);
+
+Direct_ACN convert_acn_into_direct_repr(const Algebraic_Complex_Number& number);
+
+

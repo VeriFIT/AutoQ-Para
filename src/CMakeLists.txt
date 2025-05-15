@@ -17,4 +17,4 @@ add_executable(runner runner.cpp)
 
 target_link_libraries(runner PRIVATE acn)
 
-add_executable(tests tests.cpp)
+add_executable(tests tests.cpp arith.cpp)
