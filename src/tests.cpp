@@ -1,4 +1,5 @@
 #include "arith.hpp"
+#include "bit_set.hpp"
 #define CATCH_CONFIG_MAIN
 
 #include <catch2/catch.hpp>
@@ -140,5 +141,34 @@ TEST_CASE( "Add row to a row-echelon-form matrix", "[ACN Matrix]") {
         s64 row_slot_idx = add_row_to_row_echelon_matrix(matrix, row);
 
         REQUIRE(row_slot_idx == -1);
+    }
+}
+
+TEST_CASE( "Intersection emptiness", "[Bit sets]") {
+    {
+        Bit_Set bit_set_a(10);
+        bit_set_a.set_bit(0, true);
+        bit_set_a.set_bit(1, true);
+
+        Bit_Set bit_set_b(8);
+        bit_set_b.set_bit(0, false);
+        bit_set_b.set_bit(1, false);
+        bit_set_b.set_bit(2, true);
+
+        bool result = bit_set_a.is_intersection_empty(bit_set_b);
+        REQUIRE(result);
+    }
+
+    {
+        Bit_Set bit_set_a(127);
+        bit_set_a.set_bit(84, true);
+        bit_set_a.set_bit(85, true);
+
+        Bit_Set bit_set_b(133);
+        bit_set_b.set_bit(67, false);
+        bit_set_b.set_bit(85, true);
+
+        bool result = bit_set_a.is_intersection_empty(bit_set_b);
+        REQUIRE(!result);
     }
 }
