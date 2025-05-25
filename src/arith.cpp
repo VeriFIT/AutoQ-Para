@@ -19,13 +19,17 @@ std::ostream& operator<<(std::ostream& os, const Complex_Number& number) {
     return os;
 }
 
-Algebraic_Complex_Number acn_zero() {
-    return Algebraic_Complex_Number {
-        .a = 0, .b = 0, .c = 0, .d = 0, .k = 0
-    };
+std::ostream& operator<<(std::ostream& os, const Algebraic_Complex_Number& number) {
+    os << "("
+       << mpz_get_si(number.a) << ", "
+       << mpz_get_si(number.b) << ", "
+       << mpz_get_si(number.c) << ", "
+       << mpz_get_si(number.d) << ", "
+       << mpz_get_si(number.k) << ")";
+    return os;
 }
 
-std::ostream& operator<<(std::ostream& os, const Algebraic_Complex_Number& number) {
+std::ostream& operator<<(std::ostream& os, const Fixed_Precision_ACN& number) {
     os << "("
        << number.a << ", "
        << number.b << ", "
@@ -34,7 +38,6 @@ std::ostream& operator<<(std::ostream& os, const Algebraic_Complex_Number& numbe
        << number.k << ")";
     return os;
 }
-
 
 s64 add_row_to_row_echelon_matrix(ACN_Matrix& matrix, ACN_Matrix& row) {
     assert(matrix.width == row.width);
@@ -89,7 +92,7 @@ ACN_Matrix square_acn_matrix_from_ints(const std::vector<s64>& ints) {
 
     for (u64 elem_idx = 0; elem_idx < ints.size(); elem_idx++) {
         s64 elem_int_value = ints[elem_idx];
-        matrix_slots[elem_idx] = {.a = elem_int_value, .b = 0, .c = 0, .d = 0, .k = 0};
+        mpz_set_si(matrix_slots[elem_idx].a, elem_int_value);
     }
 
     result.data = matrix_slots;
@@ -102,7 +105,7 @@ ACN_Matrix row_from_ints(const std::vector<s64>& row_data) {
 
     for (u64 elem_idx = 0; elem_idx < row_data.size(); elem_idx++) {
         s64 elem_int_value = row_data[elem_idx];
-        matrix_slots[elem_idx] = {.a = elem_int_value, .b = 0, .c = 0, .d = 0, .k = 0};
+        mpz_set_si(matrix_slots[elem_idx].a, elem_int_value);
     }
 
     result.data = matrix_slots;
@@ -115,15 +118,16 @@ Direct_ACN convert_acn_into_direct_repr(const Algebraic_Complex_Number& number) 
         return {}; // All zeros
     }
 
-    s64 a = number.a;
-    s64 b = number.b - number.d;
-    s64 c = number.c;
-    s64 d = number.b + number.d;
+    s64 a = mpz_get_si(number.a);
+    s64 b = mpz_get_si(number.b) - mpz_get_si(number.d);
+    s64 c = mpz_get_si(number.c);
+    s64 d = mpz_get_si(number.b) + mpz_get_si(number.d);
 
-    s64 k = number.k / 2;
+    s64 input_k = mpz_get_si(number.k);
+    s64 k = input_k / 2;
 
-    if (number.k % 2) {
-        k += (number.k > 0);  // We want to avoid dividing integers, so in case the number is small, we make it scaling factor even smaller so we do not divide by 1/2
+    if (input_k % 2) {
+        k += (input_k > 0);  // We want to avoid dividing integers, so in case the number is small, we make it scaling factor even smaller so we do not divide by 1/2
 
         // Multiply everything by 2/sqrt(2)
         s64 new_a = b;

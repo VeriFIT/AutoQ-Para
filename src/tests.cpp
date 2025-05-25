@@ -5,69 +5,64 @@
 #include <catch2/catch.hpp>
 
 TEST_CASE( "Simple multiplication", "[Algebraic complex numbers]" ) {
-    Algebraic_Complex_Number acn = {.a = 0, .b = 1, .c = 0, .d = 0, .k = 0};
+    Algebraic_Complex_Number acn(0, 1, 0, 0, 0);
     auto result = acn * acn;
+    auto fp_result = result.into_fixed_precision();
 
-    REQUIRE(result.a == 0);
-    REQUIRE(result.b == 0);
-    REQUIRE(result.c == 1);
-    REQUIRE(result.d == 0);
-    REQUIRE(result.k == 0);
+    REQUIRE(fp_result.a == 0);
+    REQUIRE(fp_result.b == 0);
+    REQUIRE(fp_result.c == 1);
+    REQUIRE(fp_result.d == 0);
+    REQUIRE(fp_result.k == 0);
 }
 
 TEST_CASE( "Multiplication comutativity", "[Algebraic complex numbers]" ) {
-    Algebraic_Complex_Number left  = {.a = 1, .b = 2, .c = 3, .d = 4, .k = 0};
-    Algebraic_Complex_Number right = {.a = 0, .b = 1, .c = 2, .d = 3, .k = 1};
+    Algebraic_Complex_Number left  (1, 2, 3, 4, 0);
+    Algebraic_Complex_Number right (0, 1, 2, 3, 1);
+    auto left_imm  = left*right;
+    auto right_imm = right*left;
+    auto result = left_imm - right_imm;
 
-    auto result = left*right - right*left;
-    assert(result.is_zero());
+    REQUIRE(result.is_zero());
 }
 
 TEST_CASE( "Scaling during addition", "[Algebraic complex numbers]" ) {
     {
-        // Represents: 1 + 2/sqrt(2) + 2*i/sqrt(2)
-        Algebraic_Complex_Number left  = {.a = 1, .b = 2, .c = 0, .d = 0, .k = 0};
-
-        // Represents: -10 -8/sqrt(2) - 10*i
-        Algebraic_Complex_Number right = {.a = -2, .b = -5, .c = 0, .d = 0, .k = -2};
+        Algebraic_Complex_Number left (1, 2, 0, 0, 0);
+        Algebraic_Complex_Number right (-2, -5, 0, 0, -2);
 
         Algebraic_Complex_Number result = left + right;
-        Direct_ACN direct_result = convert_acn_into_direct_repr(result);
+        Fixed_Precision_ACN direct_result = result.into_fixed_precision();
 
         // Result should be  -9 - 6/sqrt(2) - 10i + 2i/sqrt(2)
-        Direct_ACN expected = {-3, -8, 0, -8, 0};
+        Fixed_Precision_ACN expected (-3, -8, 0, 0, 0);
         REQUIRE(direct_result == expected);
     }
 
     {
-        // Represents: 1 + 2/sqrt(2) + 2*i/sqrt(2)
-        Algebraic_Complex_Number left  = {.a = 1, .b = 2, .c = 0, .d = 0, .k = 0};
-
-        Algebraic_Complex_Number right = {.a = -2, .b = -5, .c = 0, .d = 0, .k = -3};
+        Algebraic_Complex_Number left (1, 2, 0, 0, 0);
+        Algebraic_Complex_Number right (-2, -5, 0, 0, -3);
 
         Algebraic_Complex_Number result = left + right;
+        auto fp_result = result.into_fixed_precision();
 
-        REQUIRE(result.a == 11);
-        REQUIRE(result.b == -2);
-        REQUIRE(result.c == -10);
-        REQUIRE(result.d == 4);
-        REQUIRE(result.k == 0);
+        Fixed_Precision_ACN expected_result (11, -2, -10, 4, 0);
+        REQUIRE(expected_result == fp_result);
     }
 
     {
         // Represents: 1 + 2/sqrt(2) + 2*i/sqrt(2) + 1*i
-        Algebraic_Complex_Number left  = {.a = 1, .b = 2, .c = 1, .d = 0, .k = 0};
+        Algebraic_Complex_Number left(1, 2, 1, 0, 0);
 
         // Represents: -7 -4/sqrt(2) -7i/sqrt(2)
-        Algebraic_Complex_Number right = {.a = -2, .b = -5, .c = 0, .d = 2, .k = -1};
+        Algebraic_Complex_Number right(-2, -5, 0, 2, -1);
 
-        Algebraic_Complex_Number result = left + right;
+        auto result = left + right;
+        auto fp_result = result.into_fixed_precision();
 
-        REQUIRE(result.a == 4);
-        REQUIRE(result.b == 0);
-        REQUIRE(result.c == -2);
-        REQUIRE(result.d == 2);
-        REQUIRE(result.k == 0);
+        Fixed_Precision_ACN expected_result (4, 0, -2, 2, 0);
+
+        REQUIRE(expected_result == fp_result);
     }
 }
 
@@ -75,7 +70,7 @@ TEST_CASE( "Conversion into direct representation", "[Algebraic complex numbers]
 
     // Represents: 1 + -2/sqrt(2) + 3i + 6i/sqrt(2)
     {
-        Algebraic_Complex_Number number = {.a = 1, .b = 2, .c = 3, .d = 4, .k = 0};
+        Algebraic_Complex_Number number (1, 2, 3, 4, 0);
         Direct_ACN direct_repr = convert_acn_into_direct_repr(number);
 
         Direct_ACN expected_result = {1, -2, 3, 6, 0};
@@ -84,7 +79,7 @@ TEST_CASE( "Conversion into direct representation", "[Algebraic complex numbers]
 
     // Represents: -1 + 0 + 2i + 2i/sqrt(2)
     {
-        Algebraic_Complex_Number number = {.a = 0, .b = 1, .c = 2, .d = 3, .k = 1};
+        Algebraic_Complex_Number number (0, 1, 2, 3, 1);
         Direct_ACN direct_repr = convert_acn_into_direct_repr(number);
 
         Direct_ACN expected_result = {-1, 0, 2, 2, 0};
@@ -93,7 +88,7 @@ TEST_CASE( "Conversion into direct representation", "[Algebraic complex numbers]
 
     // Represents: (-1 - 2/sqrt(2) - 4i - 2i/sqrt(2)) * 4
     {
-        Algebraic_Complex_Number number = {.a = -2, .b = -5, .c = 2, .d = -3, .k = -3};
+        Algebraic_Complex_Number number (-2, -5, 2, -3, -3);
         Direct_ACN direct_repr = convert_acn_into_direct_repr(number);
 
         Direct_ACN expected_result = {-1, -2, -4, 2, -2};

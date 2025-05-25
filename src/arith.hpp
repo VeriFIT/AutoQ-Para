@@ -4,9 +4,12 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <gmp-x86_64.h>
 #include <iostream>
 #include <ostream>
 #include <vector>
+
+#include "gmp.h"
 
 typedef int64_t  s64;
 typedef uint64_t u64;
@@ -15,113 +18,247 @@ struct Complex_Number {
     float real, im;
 };
 
-std::ostream& operator<<(std::ostream& os, const Complex_Number& number);
-
-struct Algebraic_Complex_Number {
+struct Fixed_Precision_ACN {
     s64 a, b, c, d, k;
 
-    Algebraic_Complex_Number operator*(const Algebraic_Complex_Number& other) const {
-        s64 result_k = this->k + other.k;
-        s64 result_a = (this->a*other.a) - (this->b*other.d) - (this->c*other.c) - (this->d*other.b);
-        s64 result_b = (this->a*other.b) + (this->b*other.a) - (this->c*other.d) - (this->d*other.c);
-        s64 result_c = (this->a*other.c) + (this->b*other.b) + (this->c*other.a) - (this->d*other.d);
-        s64 result_d = (this->a*other.d) + (this->b*other.c) + (this->c*other.b) + (this->d*other.a);
+    Fixed_Precision_ACN(s64 a, s64 b, s64 c, s64 d, s64 k) :
+        a(a), b(b), c(c), d(d), k(k) {}
 
-        return {
-            .a = result_a,
-            .b = result_b,
-            .c = result_c,
-            .d = result_d,
-            .k = result_k
-        };
+    bool operator==(const Fixed_Precision_ACN& other) const {
+        return (a == other.a) && (b == other.b) && (c == other.c) && (d == other.d) && (k == other.k);
+    }
+};
+
+std::ostream& operator<<(std::ostream& os, const Complex_Number& number);
+std::ostream& operator<<(std::ostream& os, const Fixed_Precision_ACN& number);
+
+struct Algebraic_Complex_Number {
+    mpz_t a, b, c, d, k;
+
+    Algebraic_Complex_Number() {
+        mpz_inits(a, b, c, d, 0);
+        mpz_init_set_si(k, 0);
     }
 
-    Algebraic_Complex_Number rescale(s64 larger_k) const {
-        assert(larger_k >= this->k);
+    Algebraic_Complex_Number(s64 a, s64 b, s64 c, s64 d, s64 k = 1) {
+        mpz_init_set_si(this->a, a);
+        mpz_init_set_si(this->b, b);
+        mpz_init_set_si(this->c, c);
+        mpz_init_set_si(this->d, d);
+        mpz_init_set_si(this->k, k);
+    }
 
-        s64 scale_difference = larger_k - this->k;
-        s64 half_scale = scale_difference / 2;
+    Algebraic_Complex_Number(const Algebraic_Complex_Number& other) {
+        mpz_init_set(this->a, other.a);
+        mpz_init_set(this->b, other.b);
+        mpz_init_set(this->c, other.c);
+        mpz_init_set(this->d, other.d);
+        mpz_init_set(this->k, other.k);
+    }
 
-        Algebraic_Complex_Number rescaled = { // First multiply by (sqrt(2))^2k
-            .a = this->a << half_scale,
-            .b = this->b << half_scale,
-            .c = this->c << half_scale,
-            .d = this->d << half_scale,
-            .k = larger_k
-        };
+    Algebraic_Complex_Number(Algebraic_Complex_Number&& other) {
+        mpz_init_set(this->a, other.a);
+        mpz_init_set(this->b, other.b);
+        mpz_init_set(this->c, other.c);
+        mpz_init_set(this->d, other.d);
+        mpz_init_set(this->k, other.k);
+    };
 
-        if (scale_difference % 2) { // Multiply by sqrt(2) if needed
-            s64 new_a = -rescaled.b - rescaled.d;
-            s64 new_b = rescaled.a + rescaled.c;
-            s64 new_c = rescaled.b + rescaled.d;
-            s64 new_d = rescaled.c - rescaled.a;
+    ~Algebraic_Complex_Number() {
+        mpz_clears(a, b, c, d, k, 0);
+    }
 
-            rescaled.a = new_a;
-            rescaled.b = new_b;
-            rescaled.c = new_c;
-            rescaled.d = new_d;
+    Algebraic_Complex_Number operator*(const Algebraic_Complex_Number& other) const {
+
+        Algebraic_Complex_Number result;
+
+        mpz_t immediate;
+        mpz_init(immediate);
+
+        mpz_add(result.k, this->k, other.k);
+
+        { // (this->a*other.a) - (this->b*other.d) - (this->c*other.c) - (this->d*other.b)
+            mpz_mul(immediate, this->a, other.a);
+            mpz_add(result.a, result.a, immediate);
+
+            mpz_mul(immediate, this->b, other.d);
+            mpz_sub(result.a, result.a, immediate);
+
+            mpz_mul(immediate, this->c, other.c);
+            mpz_sub(result.a, result.a, immediate);
+
+            mpz_mul(immediate, this->d, other.b);
+            mpz_sub(result.a, result.a, immediate);
+        }
+
+        { // (this->a*other.b) + (this->b*other.a) - (this->c*other.d) - (this->d*other.c)
+            mpz_mul(immediate, this->a, other.b);
+            mpz_add(result.b, result.b, immediate);
+
+            mpz_mul(immediate, this->b, other.a);
+            mpz_add(result.b, result.b, immediate);
+
+            mpz_mul(immediate, this->c, other.d);
+            mpz_sub(result.b, result.b, immediate);
+
+            mpz_mul(immediate, this->d, other.c);
+            mpz_sub(result.b, result.b, immediate);
+        }
+
+        { // (this->a*other.c) + (this->b*other.b) + (this->c*other.a) - (this->d*other.d)
+            mpz_mul(immediate, this->a, other.c);
+            mpz_add(result.c, result.c, immediate);
+
+            mpz_mul(immediate, this->b, other.b);
+            mpz_add(result.c, result.c, immediate);
+
+            mpz_mul(immediate, this->c, other.a);
+            mpz_add(result.c, result.c, immediate);
+
+            mpz_mul(immediate, this->d, other.d);
+            mpz_sub(result.c, result.c, immediate);
+        }
+
+        { // result_d = (this->a*other.d) + (this->b*other.c) + (this->c*other.b) + (this->d*other.a);
+            mpz_mul(immediate, this->a, other.d);
+            mpz_add(result.d, result.d, immediate);
+
+            mpz_mul(immediate, this->b, other.c);
+            mpz_add(result.d, result.d, immediate);
+
+            mpz_mul(immediate, this->c, other.b);
+            mpz_add(result.d, result.d, immediate);
+
+            mpz_mul(immediate, this->d, other.a);
+            mpz_add(result.d, result.d, immediate);
+        }
+
+        mpz_clear(immediate);
+
+        return result;
+    }
+
+    Algebraic_Complex_Number rescale(const mpz_t larger_k) const {
+        assert(mpz_cmp(larger_k, this->k) >= 0);
+
+        s64 scale_difference_int = mpz_get_si(larger_k) - mpz_get_si(this->k);
+        s64 half_scale_diff = scale_difference_int / 2;
+
+        Algebraic_Complex_Number rescaled;
+
+        mpz_mul_2exp(rescaled.a, this->a, half_scale_diff);
+        mpz_mul_2exp(rescaled.b, this->b, half_scale_diff);
+        mpz_mul_2exp(rescaled.c, this->c, half_scale_diff);
+        mpz_mul_2exp(rescaled.d, this->d, half_scale_diff);
+
+        if (scale_difference_int % 2) { // Multiply by sqrt(2) if needed
+            mpz_t imm;
+            mpz_init(imm);
+
+            Algebraic_Complex_Number multiplied_by_sqrt2;
+
+            // Use scale_difference as immediate value
+            // COMPUTE: s64 new_a = -rescaled.b - rescaled.d;
+            mpz_set_ui(imm, 0);
+            mpz_sub(imm, imm, rescaled.b);
+            mpz_sub(multiplied_by_sqrt2.a, imm, rescaled.d);
+
+            // COMPUTE: s64 new_b = rescaled.a + rescaled.c;
+            mpz_add(multiplied_by_sqrt2.b, rescaled.a, rescaled.c);
+
+            // COMPUTE: s64 new_c = rescaled.b + rescaled.d;
+            mpz_add(multiplied_by_sqrt2.c, rescaled.b, rescaled.d);
+
+            // COMPUTE: s64 new_d = rescaled.c - rescaled.a;
+            mpz_sub(multiplied_by_sqrt2.d, rescaled.c, rescaled.a);
+
+            mpz_clear(imm);
+
+            return multiplied_by_sqrt2;
         }
 
         return rescaled;
     }
 
-    Algebraic_Complex_Number negate() const {
-        Algebraic_Complex_Number result = {
-            .a = -this->a,
-            .b = -this->b,
-            .c = -this->c,
-            .d = -this->d,
-            .k = this->k
-        };
+    Algebraic_Complex_Number operator-() const {
+        Algebraic_Complex_Number result;
+
+        mpz_neg(result.a, this->a);
+        mpz_neg(result.b, this->b);
+        mpz_neg(result.c, this->c);
+        mpz_neg(result.d, this->d);
+        mpz_set(result.k, this->k);
+
         return result;
     }
 
     Algebraic_Complex_Number operator+(const Algebraic_Complex_Number& other) const {
         const Algebraic_Complex_Number* smaller = this;
         const Algebraic_Complex_Number* larger  = &other;
-        if (larger->k > smaller->k) {
+        if (mpz_cmp(larger->k, smaller->k) >= 1) {
             std::swap(smaller, larger);
         }
 
         Algebraic_Complex_Number larger_rescaled = larger->rescale(smaller->k);
 
-        Algebraic_Complex_Number result = {
-            .a = smaller->a + larger_rescaled.a,
-            .b = smaller->b + larger_rescaled.b,
-            .c = smaller->c + larger_rescaled.c,
-            .d = smaller->d + larger_rescaled.d,
-            .k = smaller->k
-        };
+        Algebraic_Complex_Number result;
+
+        mpz_add(result.a, smaller->a, larger_rescaled.a);
+        mpz_add(result.b, smaller->b, larger_rescaled.b);
+        mpz_add(result.c, smaller->c, larger_rescaled.c);
+        mpz_add(result.d, smaller->d, larger_rescaled.d);
+        mpz_set(result.k, smaller->k);
 
         return result;
     }
 
     Algebraic_Complex_Number operator-(const Algebraic_Complex_Number& other) const {
-        auto other_negated = other.negate();
-        return *this + other.negate();
+        auto other_negated = -other;
+        return *this + other_negated;
+    }
+
+    void operator=(Algebraic_Complex_Number& other) {
+        mpz_set(this->a, other.a);
+        mpz_set(this->b, other.b);
+        mpz_set(this->c, other.c);
+        mpz_set(this->d, other.d);
+        mpz_set(this->k, other.k);
     }
 
     void operator+=(const Algebraic_Complex_Number& other) {
         auto addition_result = *this + other;
 
-        this->a = addition_result.a;
-        this->b = addition_result.b;
-        this->c = addition_result.c;
-        this->d = addition_result.d;
-        this->k = addition_result.k;
+        mpz_set(this->a, addition_result.a);
+        mpz_set(this->b, addition_result.b);
+        mpz_set(this->c, addition_result.c);
+        mpz_set(this->d, addition_result.d);
+        mpz_set(this->k, addition_result.k);
     }
 
     bool is_zero() const {
-        return (this->a == 0) && (this->b == 0) && (this->c == 0) && (this->d == 0);
+        return (mpz_cmp_ui(this->a, 0) == 0) &&
+               (mpz_cmp_ui(this->b, 0) == 0) &&
+               (mpz_cmp_ui(this->c, 0) == 0) &&
+               (mpz_cmp_ui(this->d, 0) == 0);
     }
 
-    Complex_Number into_approx() {
+    Complex_Number into_approx() const {
         float one_over_sqrt2 = 1.0f / std::sqrt(2);
 
-        float real = static_cast<float>(this->a) + one_over_sqrt2*(static_cast<float>(b) - static_cast<float>(this->d));
-        float im   = static_cast<float>(this->c) + one_over_sqrt2*(static_cast<float>(b) + static_cast<float>(this->d));
+        float real = static_cast<float>(mpz_get_si(this->a)) + one_over_sqrt2*(static_cast<float>(mpz_get_si(b)) - static_cast<float>(mpz_get_si(this->d)));
+        float im   = static_cast<float>(mpz_get_si(this->c)) + one_over_sqrt2*(static_cast<float>(mpz_get_si(b)) + static_cast<float>(mpz_get_si(this->d)));
 
         return {.real = real, .im = im};
+    }
+
+    Fixed_Precision_ACN into_fixed_precision() const {
+        return Fixed_Precision_ACN(
+            mpz_get_si(this->a),
+            mpz_get_si(this->b),
+            mpz_get_si(this->c),
+            mpz_get_si(this->d),
+            mpz_get_si(this->k)
+        );
     }
 };
 
