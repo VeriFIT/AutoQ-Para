@@ -167,3 +167,38 @@ TEST_CASE( "Intersection emptiness", "[Bit sets]") {
         REQUIRE(!result);
     }
 }
+
+TEST_CASE( "Superset checking", "[Bit sets]") {
+    {
+        Bit_Set bit_set_a(10);
+        bit_set_a.set_bit(0, true);
+        bit_set_a.set_bit(1, true);
+
+        Bit_Set bit_set_b(65);
+        bit_set_b.set_bit(0, false);
+        bit_set_b.set_bit(1, false);
+        bit_set_b.set_bit(2, true);
+
+        bool result_a = bit_set_a.is_superset(bit_set_b);
+        REQUIRE(!result_a);
+
+        bool result_b = bit_set_b.is_superset(bit_set_a);
+        REQUIRE(!result_b);
+    }
+
+    {
+        Bit_Set bit_set_a(99);
+        bit_set_a.set_bit(0,  true);
+        bit_set_a.set_bit(1,  true);
+        bit_set_a.set_bit(65, true);
+        bit_set_a.set_bit(66, true);
+
+        Bit_Set bit_set_b(66);
+        bit_set_b.set_bit(0,  true);
+        bit_set_b.set_bit(1,  true);
+        bit_set_b.set_bit(65, true);
+
+        bool result = bit_set_a.is_superset(bit_set_b);
+        REQUIRE(result);
+    }
+}

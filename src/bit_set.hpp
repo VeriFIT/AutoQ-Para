@@ -37,6 +37,29 @@ struct Bit_Set {
         return spilled_contents == 0; // The result of and is 0, meaning that the intersection is empty
     }
 
+    bool is_superset(const Bit_Set& other) const {
+        u64 min_size = std::min(this->size, other.size);
+
+        u64 chunks_to_compare = min_size / sizeof(u64);
+
+        for (u64 chunk_idx = 0; chunk_idx < chunks_to_compare; chunk_idx++) {
+            u64 interleaved = this->data[chunk_idx] & other.data[chunk_idx];
+
+            // There is a bit set in other chunk that is not set in this
+            if (interleaved != this->data[chunk_idx]) return false;
+        }
+
+        u64 spilled_size = min_size % sizeof(u64);
+        if (spilled_size == 0) return true;
+
+        u64 mask =~((~0) << spilled_size); // Extract only the relevant bits
+        u64 spilled_interleaved = this->data[chunks_to_compare] | other.data[chunks_to_compare];
+
+        spilled_interleaved = spilled_interleaved & mask;
+
+        return spilled_interleaved == (this->data[chunks_to_compare] & mask);
+    }
+
     u64 calc_target_bucket(u64 bit_idx) {
         u64 bucket = bit_idx / sizeof(u64);
         return bucket;
