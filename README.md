@@ -5,17 +5,18 @@ of checking whether a given WA is zero, however, it does not support
 algebraic representation of complex numbers. All further work is focused
 on the C++ implementation located in `src/`.
 
+## Architecture
+![alt text](https://github.com/MichalHe/swta-implementation/blob/main/docs/pipeline/image.png?raw=true)
+
 ## C++ implementation - tasks:
 
-### Test suite
-- [x] ACNs - test scaling during addition
-- [ ] ACN Matrix - test row insertion into row-echelon matrix
+Keeping a visible tasklist so that we do not forget.
 
-### Features
+### SWTA+TA Features - Tasklist
 - [x] Algebraic representation of complex numbers (ACN)
 - [x] ACN Matrices
-- [ ] Precise display of ACNs (for debugging)
-- [ ] WA representation
+- [x] Precise display of ACNs (for debugging)
+- [x] WA representation
 - [ ] Checking whether a given WA is zero
 - [ ] SWTA representation - probably using (some sort of) linear forms
 - [ ] SWTA>WA conversion
