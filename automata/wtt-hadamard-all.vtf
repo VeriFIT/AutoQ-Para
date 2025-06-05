@@ -1,0 +1,10 @@
+@WTT                    # weighted tree transducer
+%Name wtt-hadamard-all  # name (optional)
+%Root q                 # root state (required)
+%Leaf q                 # leaf states (required)
+%Alphabet x             # alphabet (optional)
+
+# the format is
+# <parent> <symbol> (<linear form for left-hand subtree>) (<linear form for right-hand subtree>)
+# where the linear forms contain 'L' and 'R' for denoting the left/right subtrees
+q x (invsqrt2 q L + invsqrt2 q R) (invsqrt2 q L - invsqrt2 q R)

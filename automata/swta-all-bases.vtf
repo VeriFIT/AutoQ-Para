@@ -1,0 +1,9 @@
+@SWTA                 # synchronized weighted tree automaton
+%Name swta-all-bases  # name (optional)
+%Root q               # root state (required)
+%Leaf q               # leaf states (required)
+%Alphabet x           # alphabet (optional)
+%Colours 1 2          # colours (optional)
+
+q x 1 (q) (0)         # the format is <parent> <symbol> <colour> (<linear form for left-hand subtree>) (<linear form for right-hand subtree>)
+q x 2 (0) (q)

@@ -1,0 +1,8 @@
+@SWTA
+%Name swta-zero-bases
+%Root q
+%Leaf q
+%Alphabet x
+%Colours 1
+
+q x 1 (q) (0)
