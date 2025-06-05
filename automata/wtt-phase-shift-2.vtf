@@ -1,0 +1,7 @@
+@WTT
+%Name wtt-phase-shift-2
+%Root q
+%Leaf s
+%Alphabet t
+
+q t (s L) (omega(2) s R)
