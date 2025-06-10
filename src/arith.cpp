@@ -39,9 +39,13 @@ std::ostream& operator<<(std::ostream& os, const Fixed_Precision_ACN& number) {
     return os;
 }
 
-s64 add_row_to_row_echelon_matrix(ACN_Matrix& matrix, ACN_Matrix& row) {
-    assert(matrix.width == row.width);
-    assert(row.height == 1);
+s64 add_row_to_row_echelon_matrix(ACN_Matrix& matrix, ACN_Matrix& in_row) {
+    assert(matrix.width == in_row.width);
+    assert(in_row.height == 1);
+
+    if (in_row.contains_only_zeros()) return -1;
+
+    ACN_Matrix row (in_row); // Make a local copy, since we will be modifying it
 
     u64 inserted_row_pivot_idx = row.find_nonzero_elem_in_row(0);
 
@@ -100,7 +104,6 @@ ACN_Matrix square_acn_matrix_from_ints(const std::vector<s64>& ints) {
 }
 
 ACN_Matrix row_from_ints(const std::vector<s64>& row_data) {
-    ACN_Matrix result(1, row_data.size());
     Algebraic_Complex_Number* matrix_slots = new Algebraic_Complex_Number[row_data.size()];
 
     for (u64 elem_idx = 0; elem_idx < row_data.size(); elem_idx++) {
@@ -108,7 +111,19 @@ ACN_Matrix row_from_ints(const std::vector<s64>& row_data) {
         mpz_set_si(matrix_slots[elem_idx].a, elem_int_value);
     }
 
-    result.data = matrix_slots;
+    ACN_Matrix result(1, row_data.size(), matrix_slots);
+    return result;
+}
+
+ACN_Matrix column_from_ints(const std::vector<s64>& column_data) {
+    Algebraic_Complex_Number* matrix_slots = new Algebraic_Complex_Number[column_data.size()];
+
+    for (u64 elem_idx = 0; elem_idx < column_data.size(); elem_idx++) {
+        s64 elem_int_value = column_data[elem_idx];
+        mpz_set_si(matrix_slots[elem_idx].a, elem_int_value);
+    }
+
+    ACN_Matrix result(column_data.size(), 1, matrix_slots);
     return result;
 }
 

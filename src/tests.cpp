@@ -1,5 +1,6 @@
 #include "arith.hpp"
 #include "bit_set.hpp"
+#include "weighted_automata.hpp"
 #define CATCH_CONFIG_MAIN
 
 #include <catch2/catch.hpp>
@@ -139,6 +140,33 @@ TEST_CASE( "Add row to a row-echelon-form matrix", "[ACN Matrix]") {
     }
 }
 
+TEST_CASE( "MMUL", "[ACN Matrix]") {
+    {
+       ACN_Matrix row = row_from_ints({1, -2});
+       ACN_Matrix mat = square_acn_matrix_from_ints({
+           1, 2,
+           3, 4
+       });
+       auto result = row * mat;
+
+       auto expected = row_from_ints({-5, -6});
+       REQUIRE(result == expected);
+    }
+    {
+       ACN_Matrix row = row_from_ints({0, -2, 1, 0});
+       ACN_Matrix mat = square_acn_matrix_from_ints({
+           0, -2, 1, 0,
+           0,  1, 0, 1,
+           0,  0, 1, 2,
+           0,  0, 0, 0,
+       });
+       auto result = row * mat;
+
+       auto expected = row_from_ints({0, -2, 1, 0});
+       REQUIRE(result == expected);
+    }
+}
+
 TEST_CASE( "Intersection emptiness", "[Bit sets]") {
     {
         Bit_Set bit_set_a(10);
@@ -199,6 +227,60 @@ TEST_CASE( "Superset checking", "[Bit sets]") {
         bit_set_b.set_bit(65, true);
 
         bool result = bit_set_a.is_superset(bit_set_b);
+        REQUIRE(result);
+    }
+}
+
+TEST_CASE( "Zero Tests", "[Weighted automata]") {
+    {
+        u64 state_cnt = 3;
+        ACN_Matrix initial_vec = row_from_ints({1, 0, 0});
+        ACN_Matrix final_vec   = column_from_ints({0, 0, 1});
+        ACN_Matrix c0_transitions = square_acn_matrix_from_ints({
+            0, 1, 0,
+            0, 0, 1,
+            0, 0, 1,
+        });
+
+        Bit_Set c0_support (state_cnt);
+        c0_support.set_all(true);
+
+        Weighted_Automaton wa (
+            initial_vec,
+            final_vec,
+            {c0_transitions},
+            {c0_support}
+        );
+
+        bool result = is_weighted_automaton_zero(wa);
+
+        // We can reach non-zero by, e.g., "C0, C0"
+        REQUIRE(!result);
+    }
+    {
+        u64 state_cnt = 4;
+        ACN_Matrix initial_vec = row_from_ints({1, 0, 0, 0});
+        ACN_Matrix final_vec   = column_from_ints({0, 0, 0, 1});
+        ACN_Matrix c0_transitions = square_acn_matrix_from_ints({
+            0, -2, 1, 0,
+            0,  1, 0, 1,
+            0,  0, 1, 2,
+            0,  0, 0, 0,
+        });
+
+        Bit_Set c0_support (state_cnt);
+        c0_support.set_all(true);
+
+        Weighted_Automaton wa (
+            initial_vec,
+            final_vec,
+            {c0_transitions},
+            {c0_support}
+        );
+
+        bool result = is_weighted_automaton_zero(wa);
+
+        // We can reach non-zero by, e.g., "C0, C0"
         REQUIRE(result);
     }
 }

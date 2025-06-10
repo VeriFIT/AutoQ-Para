@@ -235,6 +235,18 @@ struct Algebraic_Complex_Number {
         mpz_set(this->k, addition_result.k);
     }
 
+    bool operator==(const Algebraic_Complex_Number& other) const {
+        return (mpz_cmp(this->a, other.a) == 0) &&
+               (mpz_cmp(this->b, other.b) == 0) &&
+               (mpz_cmp(this->c, other.c) == 0) &&
+               (mpz_cmp(this->d, other.d) == 0) &&
+               (mpz_cmp(this->k, other.k) == 0);
+    }
+
+    bool operator!=(const Algebraic_Complex_Number& other) const {
+        return !(*this == other);
+    }
+
     bool is_zero() const {
         return (mpz_cmp_ui(this->a, 0) == 0) &&
                (mpz_cmp_ui(this->b, 0) == 0) &&
@@ -287,14 +299,23 @@ struct ACN_Matrix {
     u64 height, width;
     Algebraic_Complex_Number* data = nullptr;
 
-    ACN_Matrix(u64 height, u64 width, Algebraic_Complex_Number* data_ptr = nullptr) : height(height), width(width), data(data_ptr) {}
+    ACN_Matrix(u64 height, u64 width, Algebraic_Complex_Number* data_ptr = nullptr) :
+        height(height), width(width), data(data_ptr)
+    {
+        if (this->data == nullptr) {
+            this->data = new Algebraic_Complex_Number[this->width*this->height]; // Zero initialized
+        }
+    }
 
     ACN_Matrix(const ACN_Matrix& other) {
         this->width  = other.width;
         this->height = other.height;
 
         this->data   = new Algebraic_Complex_Number[this->width*this->height];
-        std::memcpy(this->data, other.data, this->width*this->height*sizeof(Algebraic_Complex_Number));
+
+        for (u64 idx = 0; idx < other.width*other.height; idx++) {
+            this->data[idx] = other.data[idx];
+        }
     }
 
     ACN_Matrix(ACN_Matrix&& other) {
@@ -317,7 +338,7 @@ struct ACN_Matrix {
         for (u64 row_idx = 0; row_idx < this->height; row_idx++) {
             for (u64 col_idx = 0; col_idx < other.width; col_idx++) {
 
-                Algebraic_Complex_Number dot_product = acn_zero();
+                Algebraic_Complex_Number dot_product;
                 for (u64 elem_idx = 0; elem_idx < this->width; elem_idx++) {
                     Algebraic_Complex_Number fragment = this->at(row_idx, elem_idx) * other.at(elem_idx, col_idx);
                     dot_product += fragment;
@@ -375,6 +396,23 @@ struct ACN_Matrix {
         }
     }
 
+    bool contains_only_zeros() const {
+        for (u64 idx = 0; idx < this->width*this->height; idx++) {
+            if (!this->data[idx].is_zero()) return false;
+        }
+        return true;
+    }
+
+    bool operator==(const ACN_Matrix& other) const {
+        if (width != other.width || height != other.height) return false;
+
+        for (u64 idx = 0; idx < height*width; idx++) {
+            if (data[idx] != other.data[idx]) return false;
+        }
+
+        return true;
+    }
+
     ~ACN_Matrix() {
         if (this->data != nullptr) delete[] this->data;
     }
@@ -385,3 +423,4 @@ std::ostream& operator<<(std::ostream& os, const ACN_Matrix& matrix);
 s64 add_row_to_row_echelon_matrix(ACN_Matrix& matrix, ACN_Matrix& row);
 ACN_Matrix square_acn_matrix_from_ints(const std::vector<s64>& ints);
 ACN_Matrix row_from_ints(const std::vector<s64>& row_data);
+ACN_Matrix column_from_ints(const std::vector<s64>& column_data);

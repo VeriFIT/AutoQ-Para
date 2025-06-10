@@ -18,5 +18,5 @@ add_executable(runner runner.cpp)
 
 target_link_libraries(runner PRIVATE acn gmp)
 
-add_executable(tests tests.cpp arith.cpp)
+add_executable(tests tests.cpp arith.cpp weighted_automata.cpp)
 target_link_libraries(tests PRIVATE acn gmp)

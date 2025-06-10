@@ -4,7 +4,7 @@
 #include <cstring>
 
 struct Bit_Set {
-    u64  size;
+    u64  size; // Number of *bits* stored
     u64* data;
 
     Bit_Set(u64 size, u64* data_ptr = nullptr) : size(size), data(data_ptr) {
@@ -15,6 +15,12 @@ struct Bit_Set {
 
             memset(this->data, 0, sizeof(u64)*bucket_count);
         }
+    }
+
+    Bit_Set(const Bit_Set& other) {
+        this->size = other.size;
+        this->data = new u64[other.get_bucket_count()];
+        std::memcpy(this->data, other.data, sizeof(u64) * other.get_bucket_count());
     }
 
     bool is_intersection_empty(const Bit_Set& other) const {
@@ -76,6 +82,19 @@ struct Bit_Set {
         } else {
             this->data[target_bucket_idx] = this->data[target_bucket_idx] & ~(1u << bucket_offset);
         }
+    }
+
+    void set_all(bool value) {
+        u64 bucket_value = value ? (~0) : 0;
+
+        u64 bucket_cnt = this->get_bucket_count();
+        for (u64 bucket_idx = 0; bucket_idx < bucket_cnt; bucket_idx++) {
+            this->data[bucket_idx] = bucket_value;
+        }
+    }
+
+    void clear() {
+        this->set_all(false);
     }
 
     u64 get_bucket_count() const {
