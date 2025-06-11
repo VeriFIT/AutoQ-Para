@@ -8,16 +8,32 @@ struct Bit_Set {
     u64* data;
 
     Bit_Set(u64 size, u64* data_ptr = nullptr) : size(size), data(data_ptr) {
-        if (this->data == nullptr) {
+        if (this->data == nullptr && this->size > 0) {
             u64 bucket_count = size / sizeof(u64);
             bucket_count += (size % sizeof(u64)) > 0;
             this->data = new u64[bucket_count];
 
             memset(this->data, 0, sizeof(u64)*bucket_count);
         }
+
+        if (this->size == 0) this->data = nullptr;
     }
 
     Bit_Set(const Bit_Set& other) {
+        this->size = other.size;
+        this->data = new u64[other.get_bucket_count()];
+        std::memcpy(this->data, other.data, sizeof(u64) * other.get_bucket_count());
+    }
+
+    Bit_Set(Bit_Set&& other) {
+        this->size = other.size;
+        this->data = other.data;
+
+        other.data = nullptr;
+        other.size = 0;
+    }
+
+    void operator=(Bit_Set& other) {
         this->size = other.size;
         this->data = new u64[other.get_bucket_count()];
         std::memcpy(this->data, other.data, sizeof(u64) * other.get_bucket_count());

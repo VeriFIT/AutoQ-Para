@@ -3,7 +3,6 @@
 #include <cassert>
 #include <cmath>
 #include <cstdint>
-#include <cstring>
 #include <gmp-x86_64.h>
 #include <iostream>
 #include <ostream>
@@ -32,6 +31,11 @@ struct Fixed_Precision_ACN {
 std::ostream& operator<<(std::ostream& os, const Complex_Number& number);
 std::ostream& operator<<(std::ostream& os, const Fixed_Precision_ACN& number);
 
+/**
+ * Algebraic representation of a complex number with arbitrary precision. Number C is represented
+ * as a 5-tuple (a, b, c, d, k) such that: C = (1/sqrt(2))^k (a + bO + cO^2 + dO^3) where
+ * O (Omega) is e^(PI*i/4).
+ */
 struct Algebraic_Complex_Number {
     mpz_t a, b, c, d, k;
 
@@ -66,6 +70,11 @@ struct Algebraic_Complex_Number {
 
     ~Algebraic_Complex_Number() {
         mpz_clears(a, b, c, d, k, 0);
+    }
+
+    // Useful constants:
+    static Algebraic_Complex_Number ONE_OVER_SQRT2() {
+        return Algebraic_Complex_Number(1, 0, 0, 0, 1);
     }
 
     Algebraic_Complex_Number operator*(const Algebraic_Complex_Number& other) const {
