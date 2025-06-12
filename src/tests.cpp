@@ -1,5 +1,6 @@
 #include "arith.hpp"
 #include "bit_set.hpp"
+#include "swta.hpp"
 #include "weighted_automata.hpp"
 #include "predefined_wtts.hpp"
 
@@ -290,4 +291,9 @@ TEST_CASE( "Zero Tests", "[Weighted automata]") {
 
 TEST_CASE("Sequential composition", "[WTT]") {
     auto hadamard = get_predefined_wtt(Predefined_WTT_Name::HADAMARD);
+    auto result = compose_wtts_sequentially(hadamard, hadamard);
+
+    REQUIRE(result.initial_states.size() == 1);
+    result.normalize_all_transitions();
+    std::cout << result << "\n";
 }

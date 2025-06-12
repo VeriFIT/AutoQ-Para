@@ -263,6 +263,14 @@ struct Algebraic_Complex_Number {
                (mpz_cmp_ui(this->d, 0) == 0);
     }
 
+    void swap(Algebraic_Complex_Number& other) noexcept {
+        mpz_swap(this->a, other.a);
+        mpz_swap(this->b, other.b);
+        mpz_swap(this->c, other.c);
+        mpz_swap(this->d, other.d);
+        mpz_swap(this->k, other.k);
+    }
+
     Complex_Number into_approx() const {
         float one_over_sqrt2 = 1.0f / std::sqrt(2);
 
@@ -280,6 +288,40 @@ struct Algebraic_Complex_Number {
             mpz_get_si(this->d),
             mpz_get_si(this->k)
         );
+    }
+
+    void normalize() {
+        if (this->is_zero()) {
+            mpz_set_ui(this->k, 0);
+        }
+
+        u64 a_2pow = mpz_scan1(this->a, 0);
+        u64 b_2pow = mpz_scan1(this->b, 0);
+        u64 c_2pow = mpz_scan1(this->c, 0);
+        u64 d_2pow = mpz_scan1(this->d, 0);
+
+        u64 spare_2pow;
+        {
+            u64 spare_2pow_a = std::min(a_2pow, b_2pow);
+            u64 spare_2pow_b = std::min(c_2pow, d_2pow);
+            spare_2pow = std::min(spare_2pow_a, spare_2pow_b);
+        }
+
+        if (spare_2pow == 0) return; // There is no common power of 2 dividing all of the components (multiplying omega)
+
+        s64 available_k = mpz_get_ui(this->k) / 2;
+        if (available_k < 0) return;
+
+        u64 normalization_2pow = std::min(spare_2pow, static_cast<u64>(available_k));
+
+        // Divide (a, b, c, d) by the agreed power of 2
+        mpz_div_2exp(this->a, this->a, normalization_2pow);
+        mpz_div_2exp(this->b, this->b, normalization_2pow);
+        mpz_div_2exp(this->c, this->c, normalization_2pow);
+        mpz_div_2exp(this->d, this->d, normalization_2pow);
+
+        // Subtract from k what has been used in in the process
+        mpz_sub_ui(this->k, this->k, 2*normalization_2pow);
     }
 };
 

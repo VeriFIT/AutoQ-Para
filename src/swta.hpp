@@ -14,7 +14,14 @@ struct Linear_Form {
     struct Component {
         Algebraic_Complex_Number coef;
         State state;
+
+        Component() : coef(), state(0) {}
         Component(const Algebraic_Complex_Number& number, State state) : coef(number), state(state) {}
+
+        void swap(Component& other) noexcept {
+            this->coef.swap(other.coef);
+            std::swap(this->state, other.state);
+        }
     };
 
     std::vector<Component> components;  // Kept sorted by component.state
@@ -28,6 +35,50 @@ struct Linear_Form {
 
     bool empty() const {
         return components.empty();
+    }
+
+    void normalize() {
+        this->remove_zeros();
+
+        for (auto& component : this->components) {
+            component.coef.normalize();
+        }
+    }
+
+    void remove_zeros() {
+        s64 nonzero_idx = this->size() - 1;
+        s64 zero_idx    = 0;
+
+        if (nonzero_idx == zero_idx) { // there is only one element
+            if (this->components[zero_idx].coef.is_zero()) {
+                this->components.clear();
+            }
+            return;
+        }
+
+        while (zero_idx < nonzero_idx) {
+            // Search for the next zero slot that needs to be filled
+            for (; zero_idx < this->size(); zero_idx++) {
+                std::cout << this->components[zero_idx].coef << " ";
+                if (this->components[zero_idx].coef.is_zero()) {
+                    break;
+                }
+            }
+
+            // Search for the next coef to fill the slot from the back
+            for (; nonzero_idx >= 0; nonzero_idx--) {
+                if (!this->components[nonzero_idx].coef.is_zero()) {
+                    break;
+                }
+            }
+            if (zero_idx < nonzero_idx) break;
+
+            this->components[zero_idx].swap(this->components[nonzero_idx]);
+        }
+
+        if (zero_idx >= this->size()) {
+            this->components.resize(nonzero_idx);
+        }
     }
 };
 
@@ -86,6 +137,16 @@ struct WTT {
     size_t number_of_states() const {
         return transitions.size();
     }
+
+    void normalize_all_transitions() {
+        for (auto& transition : transitions) {
+            transition.ll.normalize();
+            transition.lr.normalize();
+            transition.rl.normalize();
+            transition.rr.normalize();
+        }
+    }
+
 };
 
 std::ostream& operator<<(std::ostream& os, const WTT::Transition& wtt_transition);

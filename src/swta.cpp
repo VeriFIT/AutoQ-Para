@@ -5,7 +5,7 @@ std::ostream& operator<<(std::ostream& os, const Linear_Form& form) {
     os << "Linear_Form{ ";
     for (u64 i = 0; i < form.components.size(); i++) {
         auto& component = form.components[i];
-        os << "(" << component.coef.into_approx() << ")" << "*q" << component.state;
+        os << "(" << component.coef << ")" << "*q" << component.state;
         if (i != form.components.size() - 1) {
             os << " ";
         }
@@ -41,26 +41,33 @@ std::ostream& operator<<(std::ostream& os, const SWTA& swta) {
 
 
 std::ostream& operator<<(std::ostream& os, const Linear_Form::Component& component) {
-     os << component.coef << " * q" << component.state << "\n";
+     os << component.coef << " * q" << component.state;
      return os;
 }
 
 
-void write_norm_with_subtree_info(std::ostream& target, const Linear_Form& form, const char* subtree_info) {
+void write_norm_with_subtree_info(std::ostream& target, const Linear_Form& form, const char* subtree_info, bool needs_leading_plus) {
+    if (needs_leading_plus) {
+        target << " + ";
+    }
+
     for (u64 i = 0; i < form.size(); i++) {
         target << form.components[i] << subtree_info;
-        if (i < form.size() - 1) target << " ";
+        if (i < form.size() - 1) target << " + ";
     }
 }
 
-
 std::ostream& operator<<(std::ostream& os, const WTT::Transition& wtt_transition) {
     os << "LEFT SUBTREE: ";
+    bool needs_plus = false; // True, if anything has been written to the output stream
     if (!wtt_transition.ll.empty()) {
-        write_norm_with_subtree_info(os, wtt_transition.ll, "(L)");
+        write_norm_with_subtree_info(os, wtt_transition.ll, "(L)", needs_plus);
+        needs_plus = true;
     }
+
     if (!wtt_transition.lr.empty()) {
-        write_norm_with_subtree_info(os, wtt_transition.lr, "(R)");
+        write_norm_with_subtree_info(os, wtt_transition.lr, "(R)", needs_plus);
+        needs_plus = true;
     }
 
     if (wtt_transition.ll.empty() && wtt_transition.lr.empty()) {
@@ -68,14 +75,19 @@ std::ostream& operator<<(std::ostream& os, const WTT::Transition& wtt_transition
     }
 
     os << "; RIGHT SUBTREE: ";
+    needs_plus = false; // Reset
 
     if (!wtt_transition.rl.empty()) {
-        write_norm_with_subtree_info(os, wtt_transition.ll, "(L)");
+        write_norm_with_subtree_info(os, wtt_transition.rl, "(L)", needs_plus);
+        needs_plus = true;
     }
+
     if (!wtt_transition.rr.empty()) {
-        write_norm_with_subtree_info(os, wtt_transition.lr, "(R)");
+        write_norm_with_subtree_info(os, wtt_transition.rr, "(R)", needs_plus);
+        needs_plus = true;
     }
-    if (wtt_transition.ll.empty() && wtt_transition.lr.empty()) {
+
+    if (wtt_transition.rl.empty() && wtt_transition.rr.empty()) {
         os << "0";
     }
 
@@ -84,7 +96,7 @@ std::ostream& operator<<(std::ostream& os, const WTT::Transition& wtt_transition
 
 
 std::ostream& operator<<(std::ostream& os, const WTT& wtt) {
-    os << "WTT {";
+    os << "WTT {\n";
 
     for (u64 state = 0; state < wtt.number_of_states(); state++) {
         os << "  " << state << ": " << wtt.transitions[state] << "\n";
@@ -146,8 +158,8 @@ void extend_form_with_product_and_node_discoveries(Linear_Form& destination, Lin
 WTT compose_wtts_sequentially(WTT& first, WTT& second) {
     std::vector<State_Pair>   worklist;
 
-    std::map<State_Pair, u64>            state_handles;
-    std::vector<State>                   initial_states;
+    std::map<State_Pair, u64>        state_handles;
+    std::vector<State>               initial_states;
     std::map<State, WTT::Transition> transitions;
 
     u64 init_state_cnt = first.initial_states.size()*second.initial_states.size();
@@ -191,8 +203,8 @@ WTT compose_wtts_sequentially(WTT& first, WTT& second) {
         }
 
         { // rr
-            extend_form_with_product_and_node_discoveries(lr, first_transition.lr, second_transitions.rl, state_handles, worklist);
-            extend_form_with_product_and_node_discoveries(lr, first_transition.rr, second_transitions.rr, state_handles, worklist);
+            extend_form_with_product_and_node_discoveries(rr, first_transition.lr, second_transitions.rl, state_handles, worklist);
+            extend_form_with_product_and_node_discoveries(rr, first_transition.rr, second_transitions.rr, state_handles, worklist);
         }
 
         WTT::Transition resulting_transition (ll, lr, rl, rr);
