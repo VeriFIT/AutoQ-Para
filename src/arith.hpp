@@ -77,6 +77,10 @@ struct Algebraic_Complex_Number {
         return Algebraic_Complex_Number(1, 0, 0, 0, 1);
     }
 
+    static Algebraic_Complex_Number ONE() {
+        return Algebraic_Complex_Number(1, 0, 0, 0, 0);
+    }
+
     Algebraic_Complex_Number operator*(const Algebraic_Complex_Number& other) const {
 
         Algebraic_Complex_Number result;

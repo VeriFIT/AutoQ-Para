@@ -4,10 +4,10 @@
 #include "bit_set.hpp"
 
 #include <vector>
-#include <map>
 
 typedef u64 Color;
 typedef u64 State;
+typedef u64 Internal_Symbol;
 
 
 struct Linear_Form {
@@ -38,8 +38,6 @@ struct Linear_Form {
     }
 
     void normalize() {
-        this->remove_zeros();
-
         for (auto& component : this->components) {
             component.coef.normalize();
         }
@@ -86,12 +84,37 @@ struct Linear_Form {
  * Synchronized Weighted Tree Automaton
  */
 struct SWTA {
+    /**
+     * Transition from a state along a color.
+     *
+     * If any of the linear forms are empty, then the state does not have a transition for the given color.
+     */
     struct Transition {
         Linear_Form left;
         Linear_Form right;
+
+        bool is_present() const {
+            return left.empty() || right.empty();
+        }
     };
 
-    std::vector< std::map<Color, Transition> > transitions;  // transitions[state] are the transitions from a state
+    using Transitions_From_State = std::vector<Transition>;
+
+    std::vector<Transitions_From_State> transitions;  // transitions[state] are the transitions from a state
+
+    std::vector<State> initial_states;
+    Bit_Set states_with_leaf_transitions;
+
+    u64 number_of_states() const {
+        return transitions.size();
+    }
+
+    u64 number_of_colors() const {
+        if (this->transitions.empty()) { // There are no states, so the automaton is weird
+            return 0;
+        }
+        return transitions[0].size();
+    }
 };
 
 std::ostream& operator<<(std::ostream& os, const Linear_Form& form);
@@ -112,10 +135,12 @@ struct WTT {
         Transition(Linear_Form ll, Linear_Form lr, Linear_Form rl, Linear_Form rr) : ll(ll), lr(lr), rl(rl), rr(rr) {}
     };
 
+    using Transitions = std::vector<std::vector<Transition>>;
+
     /**
-     *  Indexed by state: transitions[state] are transitions from the state `state`.
+     *  Indexed by state: transitions[internal_symbol][state] are transitions from the state `state` along the internal symbol `internal_symbol`.
      */
-    std::vector<Transition> transitions;
+    Transitions transitions;
 
     std::vector<State> initial_states;
 
@@ -125,7 +150,7 @@ struct WTT {
      */
     Bit_Set states_with_leaf_transitions;
 
-    WTT(const std::vector<Transition>& transitions, const std::vector<State>& states_with_leaf_transitions, const std::vector<State>& initial_states) : transitions(transitions), states_with_leaf_transitions(0, nullptr), initial_states(initial_states)
+    WTT(const Transitions& transitions, const std::vector<State>& states_with_leaf_transitions, const std::vector<State>& initial_states) : transitions(transitions), states_with_leaf_transitions(0, nullptr), initial_states(initial_states)
     {
         Bit_Set state_set (transitions.size());
         for (State state : states_with_leaf_transitions) {
@@ -135,18 +160,25 @@ struct WTT {
     };
 
     size_t number_of_states() const {
-        return transitions.size();
+        return transitions[0].size();
     }
 
     void normalize_all_transitions() {
-        for (auto& transition : transitions) {
-            transition.ll.normalize();
-            transition.lr.normalize();
-            transition.rl.normalize();
-            transition.rr.normalize();
+        for (Internal_Symbol internal_symbol = 0; internal_symbol < this->transitions.size(); internal_symbol++) {
+            std::vector<Transition>& transitions_for_symbol = this->transitions[internal_symbol];
+
+            for (auto& transition : transitions_for_symbol) {
+                transition.ll.normalize();
+                transition.lr.normalize();
+                transition.rl.normalize();
+                transition.rr.normalize();
+            }
         }
     }
 
+    u64 get_number_of_internal_symbols() const {
+        return this->transitions.size();
+    }
 };
 
 std::ostream& operator<<(std::ostream& os, const WTT::Transition& wtt_transition);

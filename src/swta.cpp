@@ -1,5 +1,10 @@
 #include "swta.hpp"
 #include "arith.hpp"
+#include "bit_set.hpp"
+#include "nfa.hpp"
+
+#include <vector>
+#include <map>
 
 std::ostream& operator<<(std::ostream& os, const Linear_Form& form) {
     os << "Linear_Form{ ";
@@ -94,12 +99,32 @@ std::ostream& operator<<(std::ostream& os, const WTT::Transition& wtt_transition
     return os;
 }
 
+namespace std {
+    template <typename T>
+    ostream& operator<<(ostream& os, std::vector<T> vec) {
+        os << "[";
+        for (u64 idx = 0; idx < vec.size(); idx++) {
+            auto& elem = vec[idx];
+            std::cout << elem;
+            if (idx + 1 != vec.size()) {
+                os << ", ";
+            }
+        }
+        os << "]";
+        return os;
+    }
+}
+
 
 std::ostream& operator<<(std::ostream& os, const WTT& wtt) {
     os << "WTT {\n";
+    os << "  initial states: " << wtt.initial_states << "\n";
 
-    for (u64 state = 0; state < wtt.number_of_states(); state++) {
-        os << "  " << state << ": " << wtt.transitions[state] << "\n";
+    for (Internal_Symbol sym = 0; sym < wtt.transitions.size(); sym++) {
+        const std::vector<WTT::Transition>& transition_for_sym = wtt.transitions[sym];
+        for (u64 state = 0; state < wtt.number_of_states(); state++) {
+            os << "  " << state << "--(sym=" << sym << ")-->: " << transition_for_sym[state] << "\n";
+        }
     }
 
     os << "}";
@@ -160,7 +185,11 @@ WTT compose_wtts_sequentially(WTT& first, WTT& second) {
 
     std::map<State_Pair, u64>        state_handles;
     std::vector<State>               initial_states;
-    std::map<State, WTT::Transition> transitions;
+    std::vector<std::map<State, WTT::Transition>> transitions;  // indexed by internal symbols
+
+    const u64 num_of_internal_symbols = first.get_number_of_internal_symbols();
+    assert(num_of_internal_symbols == second.get_number_of_internal_symbols());
+    transitions.resize(num_of_internal_symbols);
 
     u64 init_state_cnt = first.initial_states.size()*second.initial_states.size();
     initial_states.reserve(init_state_cnt);
@@ -183,40 +212,157 @@ WTT compose_wtts_sequentially(WTT& first, WTT& second) {
 
         State handle = state_handles.at(state_pair);
 
-        WTT::Transition first_transition   = first.transitions[state_pair.first];
-        WTT::Transition second_transitions = second.transitions[state_pair.second];
+        for (Internal_Symbol internal_symbol = 0; internal_symbol < num_of_internal_symbols; internal_symbol++) {
+            WTT::Transition first_transition   = first.transitions[internal_symbol][state_pair.first];
+            WTT::Transition second_transitions = second.transitions[internal_symbol][state_pair.second];
 
-        Linear_Form ll, lr, rl, rr;
-        { // ll
-            extend_form_with_product_and_node_discoveries(ll, first_transition.ll, second_transitions.ll, state_handles, worklist);
-            extend_form_with_product_and_node_discoveries(ll, first_transition.rl, second_transitions.lr, state_handles, worklist);
+            Linear_Form ll, lr, rl, rr;
+            { // ll
+                extend_form_with_product_and_node_discoveries(ll, first_transition.ll, second_transitions.ll, state_handles, worklist);
+                extend_form_with_product_and_node_discoveries(ll, first_transition.rl, second_transitions.lr, state_handles, worklist);
+            }
+
+            { // lr
+                extend_form_with_product_and_node_discoveries(lr, first_transition.ll, second_transitions.lr, state_handles, worklist);
+                extend_form_with_product_and_node_discoveries(lr, first_transition.lr, second_transitions.rr, state_handles, worklist);
+            }
+
+            { // rl
+                extend_form_with_product_and_node_discoveries(rl, first_transition.ll, second_transitions.rl, state_handles, worklist);
+                extend_form_with_product_and_node_discoveries(rl, first_transition.rl, second_transitions.rr, state_handles, worklist);
+            }
+
+            { // rr
+                extend_form_with_product_and_node_discoveries(rr, first_transition.lr, second_transitions.rl, state_handles, worklist);
+                extend_form_with_product_and_node_discoveries(rr, first_transition.rr, second_transitions.rr, state_handles, worklist);
+            }
+
+            WTT::Transition resulting_transition (ll, lr, rl, rr);
+            transitions[internal_symbol].emplace(handle, resulting_transition);
         }
-
-        { // lr
-            extend_form_with_product_and_node_discoveries(lr, first_transition.ll, second_transitions.lr, state_handles, worklist);
-            extend_form_with_product_and_node_discoveries(lr, first_transition.lr, second_transitions.rr, state_handles, worklist);
-        }
-
-        { // rl
-            extend_form_with_product_and_node_discoveries(rl, first_transition.ll, second_transitions.rl, state_handles, worklist);
-            extend_form_with_product_and_node_discoveries(rl, first_transition.rl, second_transitions.rr, state_handles, worklist);
-        }
-
-        { // rr
-            extend_form_with_product_and_node_discoveries(rr, first_transition.lr, second_transitions.rl, state_handles, worklist);
-            extend_form_with_product_and_node_discoveries(rr, first_transition.rr, second_transitions.rr, state_handles, worklist);
-        }
-
-        WTT::Transition resulting_transition (ll, lr, rl, rr);
-        transitions.emplace(handle, resulting_transition);
     }
 
-    std::vector<WTT::Transition> ordered_transitions;
-    ordered_transitions.reserve(transitions.size());
-    for (auto& [state, transition] : transitions) {
-        ordered_transitions.push_back(transition);
+    WTT::Transitions resulting_transitions;
+    resulting_transitions.reserve(num_of_internal_symbols);
+
+    for (Internal_Symbol sym = 0; sym < num_of_internal_symbols; sym++) {
+        std::vector<WTT::Transition> transitions_for_sym;
+
+        for (auto& [state, transition] : transitions[sym]) {
+            transitions_for_sym.push_back(transition);
+        }
+
+        resulting_transitions.push_back(transitions_for_sym);
     }
 
-    WTT result (ordered_transitions, {}, initial_states);
+    WTT result (resulting_transitions, {}, initial_states);
     return result;
+}
+
+
+struct Macrostate {
+    std::vector<State> state_names; // Accelerates computation of Post
+    Bit_Set            state_set;   // To test what states are present in the macrostate
+    State              handle;      // Assigned after initialization
+
+    Macrostate(u64 state_cnt) : state_names({}), state_set(state_cnt) {}
+    Macrostate(u64 size, const std::vector<State>& content) : state_names(content), state_set(size, content) {}
+
+    bool operator<(const Macrostate& other) const {
+        return state_set < other.state_set;
+    }
+
+    bool empty() const {
+        return state_names.empty();
+    }
+};
+
+
+Macrostate compute_post(const Macrostate* macrostate, const SWTA& swta, Color color) {
+    Macrostate post(swta.number_of_states());
+
+    for (State state : macrostate->state_names) {
+        auto& transitions_from_state = swta.transitions[state];
+        auto& transitions_for_color  = transitions_from_state[color];
+
+        if (!transitions_for_color.is_present()) {
+            post.state_set.clear();
+            break;
+        }
+
+        for (auto& component : transitions_for_color.left.components) {
+            post.state_set.set_bit(component.state);
+        }
+
+        for (auto& component : transitions_for_color.right.components) {
+            post.state_set.set_bit(component.state);
+        }
+    }
+
+    for (State state = 0; state < swta.number_of_states(); state++) {
+        if (!post.state_set.get_bit_value(state)) {
+            continue;
+        }
+
+        post.state_names.push_back(state);
+    }
+
+    return post;
+}
+
+
+NFA build_frontier_automaton(const SWTA& swta) {
+    std::map<Macrostate, NFA::State> handles;
+
+    // @Note: Use pointers to avoid copying Bit_Sets into the worklist -- only one copy present in handles should be sufficient
+    std::vector<const Macrostate*> worklist;
+    {
+        Macrostate initial_states (swta.number_of_states(), swta.initial_states);
+        auto [insert_pos, was_inserted] = handles.emplace(initial_states, 0); // We do not have any handles, so we know that the first will have value 0
+
+        worklist.push_back(&insert_pos->first);
+    }
+
+    u64 color_cnt = swta.number_of_colors();
+
+    std::map<State, std::vector<std::vector<State>>> resulting_transitions; // Use an associative container here, because we do now know the final number of states
+    Bit_Set final_macrostates (0);
+
+    while (!worklist.empty()) {
+        auto macrostate = worklist.back();
+        worklist.pop_back();
+
+        if (swta.states_with_leaf_transitions.is_superset(macrostate->state_set)) { // All of the states in macrostate can make a leaf transition
+            final_macrostates.grow_and_set_bit(macrostate->handle);
+        }
+
+        for (Color color = 0; color < color_cnt; color++) {
+            Macrostate post = compute_post(macrostate, swta, color);
+
+            if (post.empty()) {
+                continue;
+            }
+
+            post.handle = handles.size(); // Set this speculatively, before we store it in the handles map
+
+            const auto& [insert_pos, was_inserted] = handles.emplace(post, handles.size());
+            if (was_inserted) { // the macrostate is new, we need to explore it
+                worklist.push_back(&insert_pos->first);
+            } else { // There already is such a macrostate, so our speculation with the handle was incorrect
+                post.handle = insert_pos->second;
+            }
+
+            auto& transitions_from_this_macrostate = resulting_transitions[macrostate->handle];
+            transitions_from_this_macrostate[color].push_back(post.handle);
+        }
+    }
+
+    std::vector<NFA::Transitions_From_State> ordered_resulting_transitions;
+    ordered_resulting_transitions.resize(resulting_transitions.size());
+
+    for (auto& [state, transitions_from_state] : resulting_transitions) {
+        ordered_resulting_transitions[state] = transitions_from_state;
+    }
+
+    return NFA({0}, final_macrostates, ordered_resulting_transitions);
 }
