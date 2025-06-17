@@ -289,11 +289,37 @@ TEST_CASE( "Zero Tests", "[Weighted automata]") {
     }
 }
 
-TEST_CASE("Sequential composition", "[WTT]") {
+TEST_CASE("Sequential composition of two Hadamards", "[WTT]") {
     auto hadamard = get_predefined_wtt(Predefined_WTT_Name::HADAMARD);
     auto result = compose_wtts_sequentially(hadamard, hadamard);
 
     REQUIRE(result.initial_states.size() == 1);
     result.normalize_all_transitions();
-    std::cout << result << "\n";
+
+    REQUIRE(result.get_number_of_internal_symbols() == 1);
+    auto& transitions_along_sym0 = result.transitions[0];
+
+    REQUIRE(transitions_along_sym0.size() == 1);  // There should be only one state
+    auto& transition = transitions_along_sym0[0];
+
+    { // Check that LEFT subtree is an identity relation
+        REQUIRE(transition.ll.size() == 1);
+        auto& ll_component = transition.ll.components[0];
+        REQUIRE(ll_component.coef == Algebraic_Complex_Number(1, 0, 0, 0, 0));
+
+        // We do not want to test that we can reliably prune zero states here, so the state is still present in the product
+        REQUIRE(transition.lr.size() == 1);
+        auto& lr_component = transition.lr.components[0];
+        REQUIRE(lr_component.coef == Algebraic_Complex_Number(0, 0, 0, 0, 0));
+    }
+
+    { // Check that RIGHT subtree is an identity relation
+        REQUIRE(transition.rl.size() == 1);
+        auto& rl_component = transition.rl.components[0];
+        REQUIRE(rl_component.coef == Algebraic_Complex_Number(0, 0, 0, 0, 0));
+
+        REQUIRE(transition.rr.size() == 1);
+        auto& rr_component = transition.rr.components[0];
+        REQUIRE(rr_component.coef == Algebraic_Complex_Number(1, 0, 0, 0, 0));
+    }
 }
