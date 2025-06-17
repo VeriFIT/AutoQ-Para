@@ -31,4 +31,50 @@ struct NFA {
     u64 number_of_states() const {
         return this->transitions.size();
     }
+
+    u64 alphabet_size() const {
+        return this->transitions[0].size();
+    }
+
+    NFA determinize() const;
+    bool is_every_state_accepting() const;
 };
+
+
+struct Macrostate {
+    using State = u64;
+
+    std::vector<State> state_names; // Accelerates computation of Post
+    Bit_Set            state_set;   // To test what states are present in the macrostate
+    State              handle;      // Assigned after initialization
+
+    Macrostate(u64 state_cnt) : state_names({}), state_set(state_cnt) {}
+    Macrostate(u64 size, const std::vector<State>& content) : state_names(content), state_set(size, content) {}
+
+    bool operator<(const Macrostate& other) const {
+        return state_set < other.state_set;
+    }
+
+    bool empty() const {
+        return state_names.empty();
+    }
+};
+
+namespace std {
+    template <typename T>
+    ostream& operator<<(ostream& os, std::vector<T> vec) {
+        os << "[";
+        for (u64 idx = 0; idx < vec.size(); idx++) {
+            auto& elem = vec[idx];
+            std::cout << elem;
+            if (idx + 1 != vec.size()) {
+                os << ", ";
+            }
+        }
+        os << "]";
+        return os;
+    }
+}
+
+std::ostream& operator<<(std::ostream& os, const Macrostate& macrostate);
+

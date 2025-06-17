@@ -4,6 +4,9 @@ set(CMAKE_PREFIX_PATH
     ${CMAKE_PREFIX_PATH}
     /usr/lib64/cmake/Catch2/)
 
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 find_package(Catch2 REQUIRED)
 find_library(GMP_LIBRARY gmp)
 
@@ -18,5 +21,5 @@ add_executable(runner runner.cpp)
 
 target_link_libraries(runner PRIVATE acn gmp)
 
-add_executable(tests tests.cpp arith.cpp weighted_automata.cpp swta.cpp predefined_wtts.cpp)
+add_executable(tests tests.cpp arith.cpp weighted_automata.cpp swta.cpp predefined_wtts.cpp bit_set.cpp nfa.cpp)
 target_link_libraries(tests PRIVATE acn gmp)

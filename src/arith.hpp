@@ -11,6 +11,7 @@
 #include "gmp.h"
 
 typedef int64_t  s64;
+typedef uint8_t  u8;
 typedef uint64_t u64;
 
 struct Complex_Number {

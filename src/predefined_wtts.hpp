@@ -57,3 +57,7 @@ struct Def_Linear_Form {
 
 
 WTT get_predefined_wtt(Predefined_WTT_Name name);
+
+SWTA::Transition synthetize_swta_transition(const std::vector<Def_Linear_Form>& left_subtree, const std::vector<Def_Linear_Form>& right_subtree);
+
+WTT::Transition synthetize_wtt_transition(const std::vector<Def_Linear_Form>& left_subtree, const std::vector<Def_Linear_Form>& right_subtree);

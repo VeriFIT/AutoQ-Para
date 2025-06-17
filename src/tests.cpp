@@ -234,6 +234,20 @@ TEST_CASE( "Superset checking", "[Bit sets]") {
     }
 }
 
+TEST_CASE( "set_all handling of boundaries", "[Bit sets]") {
+    Bit_Set set (1);
+    set.set_all();
+
+    REQUIRE(set.data[0] == 0x01);
+}
+
+TEST_CASE( "are_all_bit_set", "[Bit sets]") {
+    Bit_Set set (1);
+    set.set_all();
+
+    REQUIRE(set.are_all_bits_set());
+}
+
 TEST_CASE( "Zero Tests", "[Weighted automata]") {
     return; // Test is disabled since the zero-checking algorithm seems to be unsound
     {
@@ -322,4 +336,51 @@ TEST_CASE("Sequential composition of two Hadamards", "[WTT]") {
         auto& rr_component = transition.rr.components[0];
         REQUIRE(rr_component.coef == Algebraic_Complex_Number(1, 0, 0, 0, 0));
     }
+}
+
+TEST_CASE("Build frontier automaton", "[SWTA]") {
+    using ACN = Algebraic_Complex_Number;
+    // Compute the frontier of the following automaton (there is only one color):
+    // q0 -> q1 + q2, q1
+    // q1 -> q1, q1
+    // q2 -> q3, q3
+    // q3 -> q3, q3
+    // FINAL STATES: q3, q1
+    State q0 = 0;
+    State q1 = 1;
+    State q2 = 2;
+    State q3 = 3;
+
+    std::vector<SWTA::Transition> q0_transitions {synthetize_swta_transition({Def_Coef(ACN::ONE()) * q1, Def_Coef(ACN::ONE()) * q2}, {Def_Coef(ACN::ONE()) * q1})};
+    std::vector<SWTA::Transition> q1_transitions {synthetize_swta_transition({Def_Coef(ACN::ONE()) * q1}, {Def_Coef(ACN::ONE()) * q1})};
+    std::vector<SWTA::Transition> q2_transitions {synthetize_swta_transition({Def_Coef(ACN::ONE()) * q3}, {Def_Coef(ACN::ONE()) * q3})};
+    std::vector<SWTA::Transition> q3_transitions {synthetize_swta_transition({Def_Coef(ACN::ONE()) * q3}, {Def_Coef(ACN::ONE()) * q3})};
+    std::vector<SWTA::Transitions_From_State> transitions {q0_transitions, q1_transitions, q2_transitions, q3_transitions};
+
+    Bit_Set leaf_states (4, {q1, q3});
+    std::vector<State> initial_states ({});
+    initial_states.push_back(q0);
+
+    SWTA swta (transitions, initial_states, leaf_states);
+
+    NFA nfa = build_frontier_automaton(swta);
+
+    REQUIRE(nfa.initial_states.size() == 1);
+    REQUIRE(nfa.final_states.popcount() == 1);
+
+    REQUIRE(nfa.number_of_states() == 3);
+
+    Color color = 0;
+    State m0 = 0;
+    // The automaton should have the following structure: {q0} -> {q1, q2} -> {q1, q3} ---self loop-->
+    REQUIRE(nfa.transitions[m0][color].size() == 1);
+    State m1 = nfa.transitions[m0][color][0];
+
+    REQUIRE(nfa.transitions[m1][color].size() == 1);
+    State m2 = nfa.transitions[m1][color][0];
+
+    REQUIRE(nfa.transitions[m1][color].size() == 1);
+    REQUIRE(nfa.transitions[m2][color][0] == m2);
+
+    REQUIRE(nfa.final_states == Bit_Set(3, {m2}));
 }

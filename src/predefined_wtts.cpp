@@ -21,13 +21,20 @@ Linear_Form collect_tagged_subtrees_into_form(const std::vector<Def_Linear_Form>
     return form;
 }
 
-WTT::Transition synthetize_transition(const std::vector<Def_Linear_Form>& left_subtree, const std::vector<Def_Linear_Form>& right_subtree) {
+WTT::Transition synthetize_wtt_transition(const std::vector<Def_Linear_Form>& left_subtree, const std::vector<Def_Linear_Form>& right_subtree) {
     Linear_Form ll = collect_tagged_subtrees_into_form(left_subtree, Subtree_Tag::LEFT);
     Linear_Form lr = collect_tagged_subtrees_into_form(left_subtree, Subtree_Tag::RIGHT);
     Linear_Form rl = collect_tagged_subtrees_into_form(right_subtree, Subtree_Tag::LEFT);
     Linear_Form rr = collect_tagged_subtrees_into_form(right_subtree, Subtree_Tag::RIGHT);
 
     return WTT::Transition(ll, lr, rl, rr);
+}
+
+SWTA::Transition synthetize_swta_transition(const std::vector<Def_Linear_Form>& left_subtree, const std::vector<Def_Linear_Form>& right_subtree) {
+    Linear_Form ll = collect_tagged_subtrees_into_form(left_subtree,  Subtree_Tag::NONE);
+    Linear_Form rr = collect_tagged_subtrees_into_form(right_subtree, Subtree_Tag::NONE);
+
+    return SWTA::Transition(ll, rr);
 }
 
 WTT get_predefined_wtt(Predefined_WTT_Name name) {
@@ -110,7 +117,7 @@ WTT get_predefined_wtt(Predefined_WTT_Name name) {
         {
             std::vector<Def_Linear_Form> left_subtree  {Def_Coef(Algebraic_Complex_Number::ONE()) * b0 * Subtree_Tag::LEFT};
             std::vector<Def_Linear_Form> right_subtree {Def_Coef(Algebraic_Complex_Number::ONE()) * b0 * Subtree_Tag::RIGHT};
-            WTT::Transition transition = synthetize_transition(left_subtree, right_subtree);
+            WTT::Transition transition = synthetize_wtt_transition(left_subtree, right_subtree);
             ancilla_transitions.push_back(transition);
             ancilla_transitions.push_back(transition);
         }
@@ -119,7 +126,7 @@ WTT get_predefined_wtt(Predefined_WTT_Name name) {
         {
             std::vector<Def_Linear_Form> left_subtree  {Def_Coef(Algebraic_Complex_Number::ONE()) * b0 * Subtree_Tag::RIGHT};
             std::vector<Def_Linear_Form> right_subtree {Def_Coef(Algebraic_Complex_Number::ONE()) * b0 * Subtree_Tag::LEFT};
-            WTT::Transition transition = synthetize_transition(left_subtree, right_subtree);
+            WTT::Transition transition = synthetize_wtt_transition(left_subtree, right_subtree);
             ancilla_transitions.push_back(transition);
             ancilla_transitions.push_back(transition);
         }
