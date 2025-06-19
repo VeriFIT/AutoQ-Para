@@ -4,9 +4,15 @@
 #include "swta.hpp"
 
 
-enum class Predefined_WTT_Name : u64 {
+enum class Predefined_WTT_Names : u64 {
     HADAMARD = 0,
     PARITY_CNOT = 1,
+};
+
+enum class Predefined_SWTA_Names : u64 {
+    BV_EXAMPLE_10STAR_PRE = 0,
+    BV_EXAMPLE_10STAR_POST = 1,
+    BV_EXAMPLE_10STAR_RESULT = 2,
 };
 
 enum class Subtree_Tag : u64 {
@@ -56,7 +62,9 @@ struct Def_Linear_Form {
 
 
 
-WTT get_predefined_wtt(Predefined_WTT_Name name);
+WTT get_predefined_wtt(Predefined_WTT_Names name);
+
+SWTA get_predefined_swta(Predefined_SWTA_Names name);
 
 SWTA::Transition synthetize_swta_transition(const std::vector<Def_Linear_Form>& left_subtree, const std::vector<Def_Linear_Form>& right_subtree);
 

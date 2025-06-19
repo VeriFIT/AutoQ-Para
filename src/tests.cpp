@@ -2,7 +2,7 @@
 #include "bit_set.hpp"
 #include "swta.hpp"
 #include "weighted_automata.hpp"
-#include "predefined_wtts.hpp"
+#include "predefined_automata.hpp"
 
 #define CATCH_CONFIG_MAIN
 
@@ -304,7 +304,7 @@ TEST_CASE( "Zero Tests", "[Weighted automata]") {
 }
 
 TEST_CASE("Sequential composition of two Hadamards", "[WTT]") {
-    auto hadamard = get_predefined_wtt(Predefined_WTT_Name::HADAMARD);
+    auto hadamard = get_predefined_wtt(Predefined_WTT_Names::HADAMARD);
     auto result = compose_wtts_sequentially(hadamard, hadamard);
 
     REQUIRE(result.initial_states.size() == 1);
@@ -340,7 +340,7 @@ TEST_CASE("Sequential composition of two Hadamards", "[WTT]") {
 
 TEST_CASE("Build frontier automaton", "[SWTA]") {
     using ACN = Algebraic_Complex_Number;
-    // Compute the frontier of the following automaton (there is only one color):
+    // Compute the frontier of the following automaton (there is only one color and one internal symbol):
     // q0 -> q1 + q2, q1
     // q1 -> q1, q1
     // q2 -> q3, q3
@@ -355,7 +355,7 @@ TEST_CASE("Build frontier automaton", "[SWTA]") {
     std::vector<SWTA::Transition> q1_transitions {synthetize_swta_transition({Def_Coef(ACN::ONE()) * q1}, {Def_Coef(ACN::ONE()) * q1})};
     std::vector<SWTA::Transition> q2_transitions {synthetize_swta_transition({Def_Coef(ACN::ONE()) * q3}, {Def_Coef(ACN::ONE()) * q3})};
     std::vector<SWTA::Transition> q3_transitions {synthetize_swta_transition({Def_Coef(ACN::ONE()) * q3}, {Def_Coef(ACN::ONE()) * q3})};
-    std::vector<SWTA::Transitions_From_State> transitions {q0_transitions, q1_transitions, q2_transitions, q3_transitions};
+    SWTA::Transition_Fn transitions {{q0_transitions}, {q1_transitions}, {q2_transitions}, {q3_transitions}};
 
     Bit_Set leaf_states (4, {q1, q3});
     std::vector<State> initial_states ({});

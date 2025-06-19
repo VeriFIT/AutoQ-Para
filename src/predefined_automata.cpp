@@ -1,4 +1,4 @@
-#include "predefined_wtts.hpp"
+#include "predefined_automata.hpp"
 #include "arith.hpp"
 #include "swta.hpp"
 
@@ -37,8 +37,8 @@ SWTA::Transition synthetize_swta_transition(const std::vector<Def_Linear_Form>& 
     return SWTA::Transition(ll, rr);
 }
 
-WTT get_predefined_wtt(Predefined_WTT_Name name) {
-    if (name == Predefined_WTT_Name::HADAMARD) {
+WTT get_predefined_wtt(Predefined_WTT_Names name) {
+    if (name == Predefined_WTT_Names::HADAMARD) {
         // q0 -> LEFT{ 1/sqrt(2)(q0, L) + 1/sqrt(2)(q0, R) }, RIGHT{ 1/sqrt(2)(q0, L) - 1/sqrt(2)(q0, R) }
         // q0(left) -> (left)
 
@@ -60,7 +60,7 @@ WTT get_predefined_wtt(Predefined_WTT_Name name) {
         return transducer;
     }
 
-    if (name == Predefined_WTT_Name::PARITY_CNOT) {
+    if (name == Predefined_WTT_Names::PARITY_CNOT) {
         // Computes parity as in BV circuit with secred (10)*
         // Qubits/states are labeled with A, B
         State a0 = 0; // Odd qubit, even parity
@@ -136,4 +136,101 @@ WTT get_predefined_wtt(Predefined_WTT_Name name) {
     }
 
     throw std::runtime_error("Unknown WTT. " + std::to_string(static_cast<u64>(name)));
+}
+
+
+SWTA get_predefined_swta(Predefined_SWTA_Names name) {
+    using DLF = std::vector<Def_Linear_Form>;
+
+    if (name == Predefined_SWTA_Names::BV_EXAMPLE_10STAR_PRE) {
+        SWTA::Metadata metadata {.number_of_internal_symbols = 2, .number_of_colors = 1};
+        SWTA::Transition_Builder builder (metadata);
+
+        State q0    = 0;
+        State q1    = 1;
+        State q_bot = 2;  // Accepts zero trees of any height
+
+        Internal_Symbol sym_w = 0;
+        Internal_Symbol sym_a = 1;
+
+        { // Transition q0 ----> w(q0, q_bot)
+             DLF left_subtree  {Def_Coef(Algebraic_Complex_Number::ONE()) * q0};
+             DLF right_subtree {Def_Coef(Algebraic_Complex_Number::ZERO()) * q_bot};
+             auto transition = synthetize_swta_transition(left_subtree, right_subtree);
+             builder.add_transition(q0, 0, sym_w, transition);
+        }
+
+        { // Transition q0 ----> a(q_bot, q1)
+             DLF left_subtree  {Def_Coef(Algebraic_Complex_Number::ZERO()) * q_bot};
+             DLF right_subtree {Def_Coef(Algebraic_Complex_Number::ONE()) * q1};
+             auto transition = synthetize_swta_transition(left_subtree, right_subtree);
+             builder.add_transition(q0, 0, sym_a, transition);
+        }
+
+        { // Transition q_bot ----> a(q_bot, q_bot)
+             DLF left_subtree  {Def_Coef(Algebraic_Complex_Number::ZERO()) * q_bot};
+             DLF right_subtree {Def_Coef(Algebraic_Complex_Number::ZERO()) * q_bot};
+             auto transition = synthetize_swta_transition(left_subtree, right_subtree);
+             builder.add_transition(q_bot, 0, sym_w, transition);
+             builder.add_transition(q_bot, 0, sym_a, transition);
+        }
+
+        Bit_Set leaf_states (3, {q1, q_bot});
+        std::vector<State> initial_states {q0};
+        auto transition_fn = builder.build(3);
+
+        SWTA result (transition_fn, initial_states, leaf_states);
+    }
+
+    if (name == Predefined_SWTA_Names::BV_EXAMPLE_10STAR_POST) {
+        State q_g   = 0;
+        State q_h   = 1;
+        State q_c   = 2;
+        State q_bot = 3;
+
+        Internal_Symbol sym_w = 0;
+        Internal_Symbol sym_a = 1;
+
+        SWTA::Metadata metadata = { .number_of_internal_symbols = 2, .number_of_colors = 1 };
+        SWTA::Transition_Builder builder (metadata);
+
+        { // g ----> w(0 q_bot, h)
+             DLF left_subtree  {Def_Coef(Algebraic_Complex_Number::ZERO()) * q_bot};
+             DLF right_subtree {Def_Coef(Algebraic_Complex_Number::ONE()) * q_h};
+             auto transition = synthetize_swta_transition(left_subtree, right_subtree);
+             builder.add_transition(q_g, 0, sym_w, transition);
+        }
+
+        { // g ----> a(0 q_bot, c)
+             DLF left_subtree  {Def_Coef(Algebraic_Complex_Number::ZERO()) * q_bot};
+             DLF right_subtree {Def_Coef(Algebraic_Complex_Number::ONE()) * q_c};
+             auto transition = synthetize_swta_transition(left_subtree, right_subtree);
+             builder.add_transition(q_g, 0, sym_a, transition);
+        }
+
+        { // h ----> w(g, 0 q_bot)
+             DLF left_subtree  {Def_Coef(Algebraic_Complex_Number::ONE()) * q_g};
+             DLF right_subtree {Def_Coef(Algebraic_Complex_Number::ZERO()) * q_bot};
+             auto transition = synthetize_swta_transition(left_subtree, right_subtree);
+             builder.add_transition(q_h, 0, sym_w, transition);
+        }
+
+        { // h ----> a(0 q_bot, c)
+             DLF left_subtree  {Def_Coef(Algebraic_Complex_Number::ZERO()) * q_bot};
+             DLF right_subtree {Def_Coef(Algebraic_Complex_Number::ONE()) * q_c};
+             auto transition = synthetize_swta_transition(left_subtree, right_subtree);
+             builder.add_transition(q_g, 0, sym_a, transition);
+        }
+
+        builder.add_bot_state_transitions(q_bot);
+
+        std::vector<State> initial_states ({q_g});
+        Bit_Set leaf_states (4, {q_bot, q_c});
+        auto transition_fn = builder.build(4);
+        SWTA result (transition_fn, initial_states, leaf_states);
+
+        return result;
+    }
+
+    throw std::runtime_error("No definition for the predefined SWTA: " + std::to_string(static_cast<u64>(name)));
 }

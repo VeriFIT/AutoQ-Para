@@ -82,6 +82,10 @@ struct Algebraic_Complex_Number {
         return Algebraic_Complex_Number(1, 0, 0, 0, 0);
     }
 
+    static Algebraic_Complex_Number ZERO() {
+        return Algebraic_Complex_Number(0, 0, 0, 0, 0);
+    }
+
     Algebraic_Complex_Number operator*(const Algebraic_Complex_Number& other) const {
 
         Algebraic_Complex_Number result;
@@ -231,7 +235,7 @@ struct Algebraic_Complex_Number {
         return *this + other_negated;
     }
 
-    void operator=(Algebraic_Complex_Number& other) {
+    void operator=(const Algebraic_Complex_Number& other) {
         mpz_set(this->a, other.a);
         mpz_set(this->b, other.b);
         mpz_set(this->c, other.c);

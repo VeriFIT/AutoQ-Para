@@ -26,21 +26,22 @@ std::ostream& operator<<(std::ostream& os, const SWTA::Transition& swta_transiti
 }
 
 std::ostream& operator<<(std::ostream& os, const SWTA& swta) {
+    os << "SWTA {\n";
     for (u64 state = 0; state < swta.transitions.size(); state++) {
-        auto& transitions = swta.transitions[state];
-        s64 i = -1;
-        os << "State=" << state << "{ ";
-        for (auto& [color, transition] : transitions) {
-            i++;
+        auto& transitions_from_state = swta.transitions[state];
 
-            os << "Color@" << color << "[ " << transition << "]";
+        for (Internal_Symbol sym = 0; sym < swta.number_of_internal_symbols(); sym++) {
+            const auto& transitions_along_symbol = transitions_from_state[sym];
+                for (Color color = 0; color < swta.number_of_colors(); color++) {
+                auto& transition = transitions_along_symbol[sym];
 
-            if (i != transitions.size()) {
-                os << ", ";
+                if (!transition.is_present()) continue;
+
+                os << "  q" << state << " --color=" << color << ", symbol=" << sym << "--> [ " << transition << "]\n";
             }
         }
-        os << "}"; // End of State=x { ... transitions ...
     }
+    os << "}";
     return os;
 }
 
@@ -117,6 +118,7 @@ std::ostream& operator<<(std::ostream& os, const WTT& wtt) {
 
 struct State_Pair {
     State first, second;
+    State handle = -1;
 
     /**
      * Lexigraphical ordering.
@@ -130,23 +132,31 @@ struct State_Pair {
     }
 };
 
+std::ostream& operator<<(std::ostream& os, const State_Pair& state) {
+    os << "(" << state.first << ", " << state.second << ", handle=" << state.handle << ")";
+    return os;
+}
 
-void extend_form_with_product_and_node_discoveries(Linear_Form& destination, Linear_Form& first, Linear_Form& second, std::map<State_Pair, u64>& handles, std::vector<State_Pair>& worklist) {
+
+void extend_form_with_product_and_node_discoveries(Linear_Form& destination, const Linear_Form& first, const Linear_Form& second, std::map<State_Pair, u64>& handles, std::vector<State_Pair>& worklist) {
     for (auto& outer_comp : second.components) {
         for (auto& inner_comp : first.components) {
-            State_Pair state {inner_comp.state, outer_comp.state};
-            auto [insert_pos, was_inserted] = handles.emplace(state, handles.size());
-            State handle = insert_pos->second;
+
+            State_Pair state = {.first = inner_comp.state, .second = outer_comp.state, .handle = handles.size()};
+
+            auto [insert_pos, was_inserted] = handles.emplace(state, state.handle);
 
             if (was_inserted) {
                 worklist.push_back(state);
+            } else {
+                state.handle = insert_pos->second;
             }
 
             Algebraic_Complex_Number coef = inner_comp.coef * outer_comp.coef;
 
             bool already_present = false;
             for (auto& component : destination.components) {
-                if (component.state == handle) {
+                if (component.state == state.handle) {
                     component.coef += coef;
                     already_present = true;
                     break;
@@ -157,7 +167,7 @@ void extend_form_with_product_and_node_discoveries(Linear_Form& destination, Lin
                 continue;  // We are done here
             }
 
-            destination.components.push_back({coef, handle});
+            destination.components.push_back({coef, state.handle});
         }
     }
 }
@@ -251,17 +261,21 @@ Macrostate compute_post(const Macrostate* macrostate, const SWTA& swta, Color co
         auto& transitions_from_state = swta.transitions[state];
         auto& transitions_for_color  = transitions_from_state[color];
 
-        if (!transitions_for_color.is_present()) {
-            post.state_set.clear();
-            break;
-        }
+        for (Internal_Symbol sym = 0; sym < swta.number_of_internal_symbols(); sym++) {
+            auto& transition = transitions_for_color[sym];
 
-        for (auto& component : transitions_for_color.left.components) {
-            post.state_set.set_bit(component.state);
-        }
+            if (!transition.is_present()) {
+                post.state_set.clear();
+                break;
+            }
 
-        for (auto& component : transitions_for_color.right.components) {
-            post.state_set.set_bit(component.state);
+            for (auto& component : transition.left.components) {
+                post.state_set.set_bit(component.state);
+            }
+
+            for (auto& component : transition.right.components) {
+                post.state_set.set_bit(component.state);
+            }
         }
     }
 
@@ -411,7 +425,6 @@ bool WTT::does_state_accept_trees_for_any_colored_sequence(State state) const {
     return determinized_abstraction.is_every_state_accepting();
 }
 
-
 enum class State_Universality_Status : u8 {
     UNKNOWN = 0,
     UNIVERSAL = 1,
@@ -488,4 +501,73 @@ void WTT::remove_zeros_from_transitions() {
             remove_zeros_from_form(*this, transition.rr, cache);
         }
     }
+}
+
+SWTA::Transition compose_swta_transition_with_wtt(const SWTA::Transition& swta_transition, const WTT::Transition& wtt_transition, std::map<State_Pair, State>& handles, std::vector<State_Pair>& worklist) {
+    SWTA::Transition result;
+
+    extend_form_with_product_and_node_discoveries(result.left, wtt_transition.ll, swta_transition.left, handles, worklist);
+    extend_form_with_product_and_node_discoveries(result.left, wtt_transition.lr, swta_transition.right, handles, worklist);
+
+    extend_form_with_product_and_node_discoveries(result.right, wtt_transition.rr, swta_transition.right, handles, worklist);
+    extend_form_with_product_and_node_discoveries(result.right, wtt_transition.rl, swta_transition.left, handles, worklist);
+
+    return result;
+}
+
+SWTA apply_wtt_to_swta(const SWTA& swta, const WTT& wtt) {
+    std::vector<State_Pair> worklist; // (SWTA state, WTT state)
+
+    std::map<State_Pair, State> handles;
+
+    Bit_Set leaf_states (0);
+    std::vector<State> initial_states;
+    SWTA::Transition_Builder transition_builder ( swta.get_metadata() );
+
+
+    for (auto swta_state : swta.initial_states) {
+        for (auto wtt_state : wtt.initial_states) {
+            State_Pair product_state = { .first = swta_state, .second = wtt_state, .handle = handles.size() };
+
+            initial_states.push_back(product_state.handle);
+
+            worklist.push_back(product_state);
+            handles.emplace(product_state, product_state.handle);
+        }
+    }
+
+    while (!worklist.empty()) {
+        auto& product_state = worklist.back();
+        worklist.pop_back();
+
+        bool is_swta_state_leaf = swta.states_with_leaf_transitions.get_bit_value(product_state.first);
+        bool is_wtt_state_leaf  = wtt.states_with_leaf_transitions.get_bit_value(product_state.second);
+
+        if (is_swta_state_leaf && is_wtt_state_leaf) {
+            leaf_states.grow_and_set_bit(product_state.handle);
+        }
+
+        for (Internal_Symbol sym = 0; sym < swta.number_of_internal_symbols(); sym++) {
+            const auto& wtt_transition = wtt.transitions[product_state.second][sym];
+
+            for (Color color = 0; color < swta.number_of_colors(); color++) {
+                const auto& swta_transition = swta.transitions[product_state.first][sym][color];
+
+                if (!swta_transition.is_present()) continue;
+                if (!wtt_transition.is_present())  continue;
+
+                auto result_form = compose_swta_transition_with_wtt(swta_transition, wtt_transition, handles, worklist);
+                transition_builder.add_transition(product_state.handle, color, sym, result_form);
+            }
+        }
+
+    }
+
+    auto transition_fn = transition_builder.build();
+    SWTA result (transition_fn, initial_states, leaf_states);
+    return result;
+}
+
+void build_first_affine_program(const SWTA& swta) {
+    // @Todo
 }
