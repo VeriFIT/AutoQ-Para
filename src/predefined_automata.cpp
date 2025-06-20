@@ -153,26 +153,28 @@ SWTA get_predefined_swta(Predefined_SWTA_Names name) {
         Internal_Symbol sym_w = 0;
         Internal_Symbol sym_a = 1;
 
+        Color c = 0;
+
         { // Transition q0 ----> w(q0, q_bot)
              DLF left_subtree  {Def_Coef(Algebraic_Complex_Number::ONE()) * q0};
              DLF right_subtree {Def_Coef(Algebraic_Complex_Number::ZERO()) * q_bot};
              auto transition = synthetize_swta_transition(left_subtree, right_subtree);
-             builder.add_transition(q0, 0, sym_w, transition);
+             builder.add_transition(q0, sym_w, c, transition);
         }
 
         { // Transition q0 ----> a(q_bot, q1)
              DLF left_subtree  {Def_Coef(Algebraic_Complex_Number::ZERO()) * q_bot};
              DLF right_subtree {Def_Coef(Algebraic_Complex_Number::ONE()) * q1};
              auto transition = synthetize_swta_transition(left_subtree, right_subtree);
-             builder.add_transition(q0, 0, sym_a, transition);
+             builder.add_transition(q0, sym_a, c, transition);
         }
 
         { // Transition q_bot ----> a(q_bot, q_bot)
              DLF left_subtree  {Def_Coef(Algebraic_Complex_Number::ZERO()) * q_bot};
              DLF right_subtree {Def_Coef(Algebraic_Complex_Number::ZERO()) * q_bot};
              auto transition = synthetize_swta_transition(left_subtree, right_subtree);
-             builder.add_transition(q_bot, 0, sym_w, transition);
-             builder.add_transition(q_bot, 0, sym_a, transition);
+             builder.add_transition(q_bot, sym_w, c, transition);
+             builder.add_transition(q_bot, sym_a, c, transition);
         }
 
         Bit_Set leaf_states (3, {q1, q_bot});
@@ -194,32 +196,34 @@ SWTA get_predefined_swta(Predefined_SWTA_Names name) {
         SWTA::Metadata metadata = { .number_of_internal_symbols = 2, .number_of_colors = 1 };
         SWTA::Transition_Builder builder (metadata);
 
+        Color c = 0;
+
         { // g ----> w(0 q_bot, h)
              DLF left_subtree  {Def_Coef(Algebraic_Complex_Number::ZERO()) * q_bot};
              DLF right_subtree {Def_Coef(Algebraic_Complex_Number::ONE()) * q_h};
              auto transition = synthetize_swta_transition(left_subtree, right_subtree);
-             builder.add_transition(q_g, 0, sym_w, transition);
+             builder.add_transition(q_g, sym_w, c, transition);
         }
 
         { // g ----> a(0 q_bot, c)
              DLF left_subtree  {Def_Coef(Algebraic_Complex_Number::ZERO()) * q_bot};
              DLF right_subtree {Def_Coef(Algebraic_Complex_Number::ONE()) * q_c};
              auto transition = synthetize_swta_transition(left_subtree, right_subtree);
-             builder.add_transition(q_g, 0, sym_a, transition);
+             builder.add_transition(q_g, sym_a, c, transition);
         }
 
         { // h ----> w(g, 0 q_bot)
              DLF left_subtree  {Def_Coef(Algebraic_Complex_Number::ONE()) * q_g};
              DLF right_subtree {Def_Coef(Algebraic_Complex_Number::ZERO()) * q_bot};
              auto transition = synthetize_swta_transition(left_subtree, right_subtree);
-             builder.add_transition(q_h, 0, sym_w, transition);
+             builder.add_transition(q_h, sym_w, c, transition);
         }
 
         { // h ----> a(0 q_bot, c)
              DLF left_subtree  {Def_Coef(Algebraic_Complex_Number::ZERO()) * q_bot};
              DLF right_subtree {Def_Coef(Algebraic_Complex_Number::ONE()) * q_c};
              auto transition = synthetize_swta_transition(left_subtree, right_subtree);
-             builder.add_transition(q_g, 0, sym_a, transition);
+             builder.add_transition(q_g, sym_a, c, transition);
         }
 
         builder.add_bot_state_transitions(q_bot);

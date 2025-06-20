@@ -7,6 +7,13 @@
 #include <map>
 #include <vector>
 
+#define DEBUG 1
+#if DEBUG
+#define do_on_debug(code) { code };
+#else
+#define do_on_debug(code) { };
+#endif
+
 typedef u64 Color;
 typedef u64 State;
 typedef u64 Internal_Symbol;
@@ -102,7 +109,7 @@ struct SWTA {
 
         Transition_Builder(const Metadata& metadata) : metadata(metadata) {}
 
-        void add_transition(State source_state, Color color, Internal_Symbol symbol, const Transition& transition) {
+        void add_transition(State source_state, Internal_Symbol symbol, Color color, const Transition& transition) {
             if (!this->transitions.contains(source_state)) {
                 auto& transitions_from_state = this->transitions[source_state];
                 transitions_from_state.resize(this->metadata.number_of_internal_symbols);
@@ -194,15 +201,19 @@ struct SWTA {
         if (this->transitions.empty()) { // There are no states, so the automaton is weird
             return 0;
         }
-        return transitions[0].size();
+        return transitions[0][0].size();
     }
 
     u64 number_of_internal_symbols() const {
-        return this->transitions[0][0].size();
+        return this->transitions[0].size();
     }
 
     Metadata get_metadata() const {
         return {.number_of_internal_symbols = number_of_internal_symbols(), .number_of_colors = number_of_colors() };
+    }
+
+    const Transition& get_transition(State source, Internal_Symbol symbol, Color color) const {
+        return this->transitions[source][symbol][color];
     }
 };
 
@@ -302,3 +313,135 @@ WTT compose_wtts_sequentially(WTT& first, WTT& second);
  */
 template <typename Tree_Transition_System>
 NFA build_frontier_automaton(const Tree_Transition_System& tts, s64 root = -1);
+
+
+enum class Subtree_Tag : u64 {
+    NONE = 0, // The transition DSL definition is not finish - its missing its subtree information
+    LEFT = 1,
+    RIGHT = 2,
+};
+
+struct Affine_Program {
+    struct Transition_Symbol_Info {
+        Internal_Symbol symbol;
+        Color           color;
+        Subtree_Tag     tag;
+
+        Transition_Symbol_Info(Internal_Symbol sym, Color col, Subtree_Tag subtree_tag) : symbol(sym), color(col), tag(subtree_tag) {}
+
+        bool operator<(const Transition_Symbol_Info& other) const {
+            if (symbol < other.symbol) return true;
+            if (symbol > other.symbol) return false;
+
+            if (color < other.color) return true;
+            if (color > other.color) return false;
+
+            return static_cast<u64>(this->tag) < static_cast<u64>(other.tag);
+        }
+    };
+
+    struct Debug_Data {
+         std::map<State, Macrostate> state_names;
+    };
+
+    struct Transition_Symbol {
+        Transition_Symbol_Info info;
+        ACN_Matrix             matrix;
+    };
+
+    using Symbol_Handles = std::map<Affine_Program::Transition_Symbol_Info, u64>;
+    using Symbol_Store   = std::vector<Transition_Symbol>;
+
+    /**
+     * Given a transition symbol handle, we have a vector of possible target states - the program might
+     * be non-deterministic.
+     */
+    using Transitions_From_State = std::vector<std::vector<State>>;
+    using Transition_Fn         = std::vector<Transitions_From_State>;  // Indexed by states
+
+    Transition_Fn  transition_fn;
+    Bit_Set        final_states;
+    State          initial_state;
+    Symbol_Handles symbol_handles;
+    Symbol_Store   symbol_store;
+    Debug_Data*    debug_data = nullptr;
+
+    Affine_Program(Transition_Fn& transitions, Bit_Set& final_states, State initial_state, Symbol_Handles& handles, Symbol_Store& store) : transition_fn(transitions), symbol_handles(handles), symbol_store(store), final_states(final_states), initial_state(initial_state) {}
+
+    u64 number_of_states() const {
+        return this->transition_fn.size();
+    }
+
+    u64 number_of_symbols() const {
+        return this->symbol_store.size();
+    }
+
+    ~Affine_Program() {
+        if (this->debug_data != nullptr) delete this->debug_data;
+        this->debug_data = nullptr;
+    }
+};
+
+struct Affine_Program_Builder {
+    Affine_Program::Symbol_Handles symbol_handles;
+    Affine_Program::Symbol_Store   symbol_store;
+    Bit_Set                        final_states;
+    State                          initial_state;
+
+    std::map<State, Affine_Program::Transitions_From_State> pending_transitions;
+
+    Affine_Program_Builder (const Affine_Program::Symbol_Handles& handles, const Affine_Program::Symbol_Store& store) : symbol_handles(handles), symbol_store(store), final_states(0) {}
+
+    void add_transition(State source_state, u64 transition_symbol, State destination_state) {
+        auto& transitions_from_state = this->pending_transitions[source_state];
+
+        if (transitions_from_state.size() < this->symbol_store.size()) {
+            transitions_from_state.resize(this->symbol_store.size());
+        }
+
+        transitions_from_state[transition_symbol].push_back(destination_state);
+    }
+
+    void mark_state_final(State state) {
+        this->final_states.grow_and_set_bit(state);
+    }
+
+    void mark_state_initial(State state) {
+        this->initial_state = state;
+    }
+
+    Affine_Program build(s64 state_cnt = -1) {
+        // Some states might not have transitions, so we have to be careful if making decisions around the number of states based solely on discovered transitions.
+        state_cnt = state_cnt > 0 ? state_cnt : this->pending_transitions.rbegin()->first;
+
+        Affine_Program::Transition_Fn transitions;
+        transitions.resize(state_cnt);
+
+        State next_state = 0;
+        for (auto& [state, state_transitions] : this->pending_transitions) {
+            if (state > next_state) { // So we must have skipped over some states which do not have any transitions.
+                for (State hole_state = next_state; hole_state < state; hole_state++) {
+                    transitions[hole_state].resize(symbol_store.size());
+                }
+            }
+
+            transitions[state] = std::move(state_transitions);
+        }
+
+        State last_state = this->pending_transitions.rbegin()->first;
+        for (State hole_state = last_state + 1; static_cast<s64>(hole_state) < state_cnt; hole_state++) {
+            transitions[hole_state].resize(symbol_store.size());
+        }
+
+        final_states.grow(state_cnt);
+
+        return Affine_Program(transitions, final_states, initial_state, symbol_handles, symbol_store);
+    }
+};
+
+std::ostream& operator<<(std::ostream& os, const Affine_Program::Transition_Symbol_Info& info);
+
+void write_affine_program_into_dot(std::ostream& stream, const Affine_Program& program);
+
+Affine_Program build_first_affine_program(const SWTA& swta);
+void build_second_affine_program(const Affine_Program& first_program, const NFA& frontier_automaton);

@@ -51,12 +51,41 @@ struct Macrostate {
     Macrostate(u64 state_cnt) : state_names({}), state_set(state_cnt) {}
     Macrostate(u64 size, const std::vector<State>& content) : state_names(content), state_set(size, content) {}
 
+    Macrostate(Macrostate&& other) : state_names(other.state_names), state_set(other.state_set), handle(other.handle) {}
+
+    Macrostate(const Macrostate& other) : state_names(other.state_names), state_set(other.state_set), handle(other.handle) {}
+
     bool operator<(const Macrostate& other) const {
         return state_set < other.state_set;
     }
 
+    Macrostate& operator=(Macrostate&& other) {
+        this->handle      = other.handle;
+        this->state_set   = std::move(other.state_set);
+        this->state_names = std::move(other.state_names);
+
+        return *this;
+    }
+
+    Macrostate& operator=(const Macrostate& other) {
+        this->handle      = other.handle;
+        this->state_set   = other.state_set;
+        this->state_names = other.state_names;
+
+        return *this;
+    }
+
     bool empty() const {
         return state_names.empty();
+    }
+
+    void populate_state_names_from_set() {
+        this->state_names.clear();
+        for (State state = 0; state < this->state_set.size; state++) {
+            if (this->state_set.get_bit_value(state)) {
+                this->state_names.push_back(state);
+            }
+        }
     }
 };
 

@@ -33,11 +33,11 @@ std::ostream& operator<<(std::ostream& os, const SWTA& swta) {
         for (Internal_Symbol sym = 0; sym < swta.number_of_internal_symbols(); sym++) {
             const auto& transitions_along_symbol = transitions_from_state[sym];
                 for (Color color = 0; color < swta.number_of_colors(); color++) {
-                auto& transition = transitions_along_symbol[sym];
+                auto& transition = transitions_along_symbol[color];
 
                 if (!transition.is_present()) continue;
 
-                os << "  q" << state << " --color=" << color << ", symbol=" << sym << "--> [ " << transition << "]\n";
+                os << "  q" << state << " --symbol=" << sym << ", color=" << color << "--> [ " << transition << "]\n";
             }
         }
     }
@@ -114,7 +114,6 @@ std::ostream& operator<<(std::ostream& os, const WTT& wtt) {
     os << "}";
     return os;
 }
-
 
 struct State_Pair {
     State first, second;
@@ -568,6 +567,190 @@ SWTA apply_wtt_to_swta(const SWTA& swta, const WTT& wtt) {
     return result;
 }
 
-void build_first_affine_program(const SWTA& swta) {
-    // @Todo
+void put_form_into_matrix(ACN_Matrix& matrix, State source_state, const Linear_Form& form) {
+    for (const auto& component : form.components) {
+        matrix.set(source_state, component.state, component.coef);
+    }
+}
+
+std::pair<Affine_Program::Symbol_Handles, Affine_Program::Symbol_Store>
+extract_transition_matrices_from_swta(const SWTA& swta) {
+    Affine_Program::Symbol_Store symbol_store;
+    std::map<Affine_Program::Transition_Symbol_Info, u64> symbol_handles;
+
+    for (Internal_Symbol internal_sym = 0; internal_sym < swta.number_of_internal_symbols(); internal_sym++) {
+        for (Color color = 0; color < swta.number_of_colors(); color++) {
+            Affine_Program::Transition_Symbol_Info left_symbol  (internal_sym, color, Subtree_Tag::LEFT);
+            Affine_Program::Transition_Symbol_Info right_symbol (internal_sym, color, Subtree_Tag::RIGHT);
+
+            ACN_Matrix left_matrix  (swta.number_of_states(), swta.number_of_states());
+            ACN_Matrix right_matrix (swta.number_of_states(), swta.number_of_states());
+
+            for (State state = 0; state < swta.number_of_states(); state++) {
+                auto& transition = swta.get_transition(state, internal_sym, color);
+
+                put_form_into_matrix(left_matrix,  state, transition.left);
+                put_form_into_matrix(right_matrix, state, transition.right);
+            }
+
+            const auto [left_insert_pos, left_was_inserted]   = symbol_handles.emplace(left_symbol,  symbol_handles.size());
+            const auto [right_insert_pos, right_was_inserted] = symbol_handles.emplace(right_symbol, symbol_handles.size());
+
+            symbol_store.push_back( {left_symbol, left_matrix} );
+            symbol_store.push_back( {right_symbol, right_matrix} );
+        }
+    }
+
+    return {symbol_handles, symbol_store};
+}
+
+
+struct AP_Build_Context {
+    const SWTA& swta;
+    Affine_Program_Builder builder;
+    std::map<Macrostate, u64> macrostate_handles;
+    std::vector<Macrostate> worklist;
+
+    AP_Build_Context (const SWTA& swta, const Affine_Program::Symbol_Handles& handles, const Affine_Program::Symbol_Store& store) :
+        swta(swta),
+        builder(handles, store)
+    {}
+};
+
+void compute_post_and_store_result_in_ap(const Macrostate& macrostate, const Linear_Form& form, Affine_Program::Transition_Symbol_Info& symbol_info, AP_Build_Context& context) {
+    Macrostate post (context.swta.number_of_states());
+
+    for (const auto& component : form.components) {
+        post.state_set.set_bit(component.state);
+    }
+
+    post.handle = context.macrostate_handles.size();
+    auto [insert_pos, was_inserted] = context.macrostate_handles.emplace(post, post.handle);
+    if (was_inserted) { // Brand new macrostate, we need to explore it
+        Macrostate& macrostate_in_map = const_cast<Macrostate&>(insert_pos->first);
+        macrostate_in_map.populate_state_names_from_set();
+        context.worklist.push_back(macrostate_in_map);
+    } else {
+        post.handle = insert_pos->second;
+    }
+
+    if (post.handle == 3) {
+        std::cout << context.swta << "\n";
+        for (auto& [m, h] : context.macrostate_handles) {
+            std::cout << m << "  ->  " << h << "\n";
+        }
+    }
+
+    u64 symbol_handle = context.builder.symbol_handles.at(symbol_info);
+    context.builder.add_transition(macrostate.handle, symbol_handle, post.handle);
+}
+
+void extend_affine_program_with_post(const Macrostate& macrostate, Affine_Program::Transition_Symbol_Info& symbol_info, AP_Build_Context& context) {
+    Macrostate right_post (context.swta.number_of_states());
+
+    for (State state : macrostate.state_names) {
+        auto& transition = context.swta.get_transition(state, symbol_info.symbol, symbol_info.color);
+
+        if (!transition.is_present()) continue;
+
+        symbol_info.tag = Subtree_Tag::LEFT;
+        compute_post_and_store_result_in_ap(macrostate, transition.left, symbol_info, context);
+
+        symbol_info.tag = Subtree_Tag::RIGHT;
+        compute_post_and_store_result_in_ap(macrostate, transition.right, symbol_info, context);
+    }
+}
+
+Affine_Program build_first_affine_program(const SWTA& swta) {
+    auto [symbol_handles, symbol_store] = extract_transition_matrices_from_swta(swta);
+    AP_Build_Context build_context (swta, std::move(symbol_handles), std::move(symbol_store));
+
+    {
+        Macrostate init_macrostate (swta.number_of_states(), swta.initial_states);
+        init_macrostate.handle = 0;
+
+        build_context.macrostate_handles.emplace(init_macrostate, init_macrostate.handle);
+        build_context.worklist.push_back(init_macrostate);
+    }
+
+    while (!build_context.worklist.empty()) {
+        Macrostate macrostate = build_context.worklist.back();
+        build_context.worklist.pop_back();
+
+        for (Internal_Symbol symbol = 0; symbol < swta.number_of_internal_symbols(); symbol++) {
+            for (Color color = 0; color < swta.number_of_colors(); color++) {
+                Affine_Program::Transition_Symbol_Info symbol_info(symbol, color, Subtree_Tag::NONE);
+
+                extend_affine_program_with_post(macrostate, symbol_info, build_context);
+            }
+        }
+    }
+
+    Affine_Program program = build_context.builder.build(build_context.macrostate_handles.size());
+
+    do_on_debug({
+        program.debug_data = new Affine_Program::Debug_Data;
+        for (auto [macrostate, handle] : build_context.macrostate_handles) {
+            program.debug_data->state_names.emplace(handle, std::move(macrostate));
+        }
+    });
+
+    return program;
+}
+
+void write_affine_program_into_dot(std::ostream& stream, const Affine_Program& program) {
+    stream << "digraph Affine_Program {\n";
+
+    for (State state = 0; state < program.number_of_states(); state++) {
+        stream << "  q" << state;
+        if (program.debug_data != nullptr && program.debug_data->state_names.contains(state)) {
+            stream << " [label=\"" << program.debug_data->state_names.at(state) << "\"]";
+        }
+        stream << "\n";
+    }
+
+    for (State state = 0; state < program.number_of_states(); state++) {
+        for (u64 symbol = 0; symbol < program.transition_fn[state].size(); symbol++) {
+            Affine_Program::Transition_Symbol symbol_desc = program.symbol_store.at(symbol);
+            for (State destination : program.transition_fn[state][symbol]) {
+                stream << "  q" << state << " -> q" << destination << " [label=\"" << symbol_desc.info << "\"]\n";
+            }
+        }
+    }
+
+    stream << "}";
+}
+
+std::ostream& operator<<(std::ostream& os, const Affine_Program::Transition_Symbol_Info& info) {
+    const char* tag_name = info.tag == Subtree_Tag::LEFT ? "L" : "R";
+    // os << "(symbol=" << info.symbol << ", color=" << info.color << ", " << tag_name << ")";
+    os << info.symbol << "-" << info.color << "-" << tag_name;
+    return os;
+}
+
+template <typename T>
+struct Worklist_Construction_Context {
+    std::map<T, u64>      handles;
+    std::vector<const T*> worklist;
+
+    const T* extract() {
+        auto elem = worklist.back();
+        worklist.pop_back();
+        return elem;
+    }
+};
+
+void build_second_affine_program(const Affine_Program& first_program, const NFA& frontier_automaton, const SWTA::Metadata& metadata) {
+    Worklist_Construction_Context<State_Pair> context;
+
+    {
+        State_Pair initial_pair {.first = first_program.initial_state, .second = frontier_automaton.initial_states[0], .handle = 0};
+        auto [insert_pos, was_inserted] = context.handles.emplace(initial_pair, 0);
+        context.worklist.push_back(&insert_pos->first);
+    }
+
+    while (!context.worklist.empty()) {
+        auto state_pair = context.extract();
+        // @Todo
+    }
 }

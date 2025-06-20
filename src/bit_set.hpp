@@ -47,10 +47,22 @@ struct Bit_Set {
         other.size = 0;
     }
 
-    void operator=(const Bit_Set& other) {
+    Bit_Set& operator=(const Bit_Set& other) {
         this->size = other.size;
         this->data = new u64[other.get_bucket_count()];
         std::memcpy(this->data, other.data, sizeof(u64) * other.get_bucket_count());
+
+        return *this;
+    }
+
+    Bit_Set& operator=(Bit_Set&& other) {
+        this->size = other.size;
+        other.size = 0;
+
+        this->data = other.data;
+        other.data = nullptr;
+
+        return *this;
     }
 
     u64 bits_in_bucket() const {

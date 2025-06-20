@@ -15,12 +15,6 @@ enum class Predefined_SWTA_Names : u64 {
     BV_EXAMPLE_10STAR_RESULT = 2,
 };
 
-enum class Subtree_Tag : u64 {
-    NONE = 0, // The transition DSL definition is not finish - its missing its subtree information
-    LEFT = 1,
-    RIGHT = 2,
-};
-
 struct Def_State;
 struct Def_Coef;
 struct Def_Linear_Form;

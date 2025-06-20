@@ -416,6 +416,10 @@ struct ACN_Matrix {
         return this->data[row_idx*this->width + col_idx];
     }
 
+    void set(u64 row_idx, u64 col_idx, const Algebraic_Complex_Number& value) {
+        this->data[row_idx*this->width + col_idx] = value;
+    }
+
     u64 find_nonzero_elem_in_row(u64 row_idx) const {
         assert (row_idx < this->height);
 

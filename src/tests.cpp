@@ -384,3 +384,9 @@ TEST_CASE("Build frontier automaton", "[SWTA]") {
 
     REQUIRE(nfa.final_states == Bit_Set(3, {m2}));
 }
+
+TEST_CASE("Build first affine program", "[Affine programs]") {
+    auto swta = get_predefined_swta(Predefined_SWTA_Names::BV_EXAMPLE_10STAR_POST);
+    auto affine_program = build_first_affine_program(swta);
+    write_affine_program_into_dot(std::cout, affine_program);
+}
