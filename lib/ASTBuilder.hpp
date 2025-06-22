@@ -5,6 +5,7 @@
 #include "g4/qasm3ParserListener.h"
 #include "g4/qasm3ParserBaseVisitor.h"
 #include "g4/qasm3ParserBaseListener.h"
+#include "ASTNode.hpp"
 
 // ANTLR4-generated API (qasm3ParserVisitor) for parsing definitions from https://openqasm.com/intro.html;
 class ASTBuilder : public qasm3ParserBaseVisitor
@@ -12,7 +13,7 @@ class ASTBuilder : public qasm3ParserBaseVisitor
 public:
     std::any visitProgram(qasm3Parser::ProgramContext *ctx) override;
     std::any visitVersion(qasm3Parser::VersionContext *ctx) override;
-    // ---- std::any visitStatement(qasm3Parser::StatementContext *ctx) override;
+    /// std::any visitStatement(qasm3Parser::StatementContext *ctx) override;
     /// std::any visitAnnotation(qasm3Parser::AnnotationContext *ctx) override;
     /// std::any visitScope(qasm3Parser::ScopeContext *ctx) override;
     // TODO std::any visitPragma(qasm3Parser::PragmaContext *ctx) override;
@@ -23,7 +24,7 @@ public:
     // TODO std::any visitContinueStatement(qasm3Parser::ContinueStatementContext *ctx) override;
     // TODO std::any visitEndStatement(qasm3Parser::EndStatementContext *ctx) override;
     std::any visitForStatement(qasm3Parser::ForStatementContext *ctx) override;
-    // TODO std::any visitIfStatement(qasm3Parser::IfStatementContext *ctx) override;
+    std::any visitIfStatement(qasm3Parser::IfStatementContext *ctx) override;
     // TODO std::any visitReturnStatement(qasm3Parser::ReturnStatementContext *ctx) override;
     // TODO std::any visitWhileStatement(qasm3Parser::WhileStatementContext *ctx) override;
     // TODO std::any visitSwitchStatement(qasm3Parser::SwitchStatementContext *ctx) override;
@@ -33,17 +34,17 @@ public:
     // TODO std::any visitDelayStatement(qasm3Parser::DelayStatementContext *ctx) override;
     // TODO std::any visitNopStatement(qasm3Parser::NopStatementContext *ctx) override;
     std::any visitGateCallStatement(qasm3Parser::GateCallStatementContext *ctx) override;
-    // TODO std::any visitMeasureArrowAssignmentStatement(qasm3Parser::MeasureArrowAssignmentStatementContext *ctx) override;
+    std::any visitMeasureArrowAssignmentStatement(qasm3Parser::MeasureArrowAssignmentStatementContext *ctx) override;
     // TODO std::any visitResetStatement(qasm3Parser::ResetStatementContext *ctx) override;
     // TODO std::any visitAliasDeclarationStatement(qasm3Parser::AliasDeclarationStatementContext *ctx) override;
-    // TODO std::any visitClassicalDeclarationStatement(qasm3Parser::ClassicalDeclarationStatementContext *ctx) override;
+    std::any visitClassicalDeclarationStatement(qasm3Parser::ClassicalDeclarationStatementContext *ctx) override;
     std::any visitConstDeclarationStatement(qasm3Parser::ConstDeclarationStatementContext *ctx) override;
     // TODO std::any visitIoDeclarationStatement(qasm3Parser::IoDeclarationStatementContext *ctx) override;
     // TODO std::any visitOldStyleDeclarationStatement(qasm3Parser::OldStyleDeclarationStatementContext *ctx) override;
     std::any visitQuantumDeclarationStatement(qasm3Parser::QuantumDeclarationStatementContext *ctx) override;
     // TODO std::any visitDefStatement(qasm3Parser::DefStatementContext *ctx) override;
     // TODO std::any visitExternStatement(qasm3Parser::ExternStatementContext *ctx) override;
-    // TODO std::any visitGateStatement(qasm3Parser::GateStatementContext *ctx) override;
+    std::any visitGateStatement(qasm3Parser::GateStatementContext *ctx) override;
     /// std::any visitAssignmentStatement(qasm3Parser::AssignmentStatementContext *ctx) override;
     std::any visitExpressionStatement(qasm3Parser::ExpressionStatementContext *ctx) override;
     // TODO std::any visitCalStatement(qasm3Parser::CalStatementContext *ctx) override;
@@ -58,7 +59,7 @@ public:
     // TODO std::any visitCastExpression(qasm3Parser::CastExpressionContext *ctx) override;
     std::any visitPowerExpression(qasm3Parser::PowerExpressionContext *ctx) override;
     std::any visitBitwiseOrExpression(qasm3Parser::BitwiseOrExpressionContext *ctx) override;
-    // TODO std::any visitCallExpression(qasm3Parser::CallExpressionContext *ctx) override;
+    std::any visitCallExpression(qasm3Parser::CallExpressionContext *ctx) override;
     std::any visitBitshiftExpression(qasm3Parser::BitshiftExpressionContext *ctx) override;
     std::any visitBitwiseAndExpression(qasm3Parser::BitwiseAndExpressionContext *ctx) override;
     std::any visitEqualityExpression(qasm3Parser::EqualityExpressionContext *ctx) override;
@@ -76,9 +77,9 @@ public:
     std::any visitIndexedIdentifier(qasm3Parser::IndexedIdentifierContext *ctx) override;
     // TODO std::any visitReturnSignature(qasm3Parser::ReturnSignatureContext *ctx) override;
     // TODO std::any visitGateModifier(qasm3Parser::GateModifierContext *ctx) override;
-    // TODO std::any visitScalarType(qasm3Parser::ScalarTypeContext *ctx) override;
+    std::any visitScalarType(qasm3Parser::ScalarTypeContext *ctx) override;
     // TODO std::any visitQubitType(qasm3Parser::QubitTypeContext *ctx) override;
-    // TODO std::any visitArrayType(qasm3Parser::ArrayTypeContext *ctx) override;
+    std::any visitArrayType(qasm3Parser::ArrayTypeContext *ctx) override;
     // TODO std::any visitArrayReferenceType(qasm3Parser::ArrayReferenceTypeContext *ctx) override;
     // TODO std::any visitDesignator(qasm3Parser::DesignatorContext *ctx) override;
     // TODO std::any visitDefcalTarget(qasm3Parser::DefcalTargetContext *ctx) override;
@@ -94,4 +95,14 @@ public:
     // TODO std::any visitIdentifierList(qasm3Parser::IdentifierListContext *ctx) override;
     /// std::any visitGateOperandList(qasm3Parser::GateOperandListContext *ctx) override;
     // TODO std::any visitExternArgumentList(qasm3Parser::ExternArgumentListContext *ctx) override;
+
+private:
+    inline ASTNodePtr toAst(antlr4::tree::ParseTree *node) { return std::any_cast<ASTNodePtr>(visit(node)); }
+    // inline ASTNodePtr toAst(antlr4::tree::ParseTree *node)
+    // {
+    //     std::any val = visit(node);
+    //     if (val.type() == typeid(ASTNodePtr))
+    //         return std::any_cast<ASTNodePtr>(val);
+    //     return nullptr;
+    // }
 };
