@@ -236,5 +236,92 @@ SWTA get_predefined_swta(Predefined_SWTA_Names name) {
         return result;
     }
 
+    if (name == Predefined_SWTA_Names::BV_EXAMPLE_10STAR_RESULT) {
+        State q_gamma   = 0;
+        State q_delta   = 1;
+        State q_epsilon = 2;
+        State q_mu      = 3;
+        State q_sigma   = 4;
+        State q_bot     = 5;
+
+        u64 state_cnt = 6;
+
+        Internal_Symbol sym_w = 0;
+        Internal_Symbol sym_a = 1;
+
+        SWTA::Metadata metadata = { .number_of_internal_symbols = 2, .number_of_colors = 1 };
+        SWTA::Transition_Builder builder (metadata);
+
+        Color c = 0;
+
+        using ACN = Algebraic_Complex_Number;
+        ACN one_half (1, 0, 0, 0, 2);
+
+        { // gamma ----> w(1/2 delta + 1/2 epsilon, 1/2 delta - 1/2 epsilon)
+             DLF left_subtree  {Def_Coef(one_half) * q_delta, Def_Coef(one_half) * q_epsilon};
+             DLF right_subtree {Def_Coef(one_half) * q_delta, Def_Coef(-one_half) * q_epsilon};
+             auto transition = synthetize_swta_transition(left_subtree, right_subtree);
+             builder.add_transition(q_gamma, sym_w, c, transition);
+        }
+
+        { // gamma ----> a(0 q_bot, q_sigma)
+             DLF left_subtree  {Def_Coef(ACN::ZERO()) * q_bot};
+             DLF right_subtree {Def_Coef(ACN::ONE()) * q_sigma};
+             auto transition = synthetize_swta_transition(left_subtree, right_subtree);
+             builder.add_transition(q_gamma, sym_a, c, transition);
+        }
+
+        { // delta ----> w(q_gamma, 0 q_bot)
+             DLF left_subtree  {Def_Coef(ACN::ONE()) * q_gamma};
+             DLF right_subtree {Def_Coef(ACN::ZERO()) * q_bot};
+             auto transition = synthetize_swta_transition(left_subtree, right_subtree);
+             builder.add_transition(q_delta, sym_w, c, transition);
+        }
+
+        { // delta ----> a(0 q_bot, q_sigma)
+             DLF left_subtree  {Def_Coef(ACN::ZERO()) * q_bot};
+             DLF right_subtree {Def_Coef(ACN::ONE()) * q_sigma};
+             auto transition = synthetize_swta_transition(left_subtree, right_subtree);
+             builder.add_transition(q_delta, sym_a, c, transition);
+        }
+
+        { // epsilon ----> w(q_mu, 0 q_bot)
+             DLF left_subtree  {Def_Coef(ACN::ONE()) * q_mu};
+             DLF right_subtree {Def_Coef(ACN::ZERO()) * q_bot};
+             auto transition = synthetize_swta_transition(left_subtree, right_subtree);
+             builder.add_transition(q_epsilon, sym_w, c, transition);
+        }
+
+        { // epsilon ----> a(0 q_bot, - q_sigma)
+             DLF left_subtree  {Def_Coef(ACN::ZERO()) * q_bot};
+             DLF right_subtree {Def_Coef(-ACN::ONE()) * q_sigma};
+             auto transition = synthetize_swta_transition(left_subtree, right_subtree);
+             builder.add_transition(q_epsilon, sym_a, c, transition);
+        }
+
+        { // mu ----> w(1/2 epsilon + 1/2 delta, 1/2 delta - 1/2 epsilon)
+             DLF left_subtree  {Def_Coef(one_half) * q_epsilon, Def_Coef(one_half) * q_delta};
+             DLF right_subtree {Def_Coef(one_half) * q_epsilon, Def_Coef(-one_half) * q_delta};
+             auto transition = synthetize_swta_transition(left_subtree, right_subtree);
+             builder.add_transition(q_mu, sym_w, c, transition);
+        }
+
+        { // mu ----> a(0 q_bot, q_sigma)
+             DLF left_subtree  {Def_Coef(ACN::ZERO()) * q_bot};
+             DLF right_subtree {Def_Coef(-ACN::ONE()) * q_sigma};
+             auto transition = synthetize_swta_transition(left_subtree, right_subtree);
+             builder.add_transition(q_mu, sym_a, c, transition);
+        }
+
+        builder.add_bot_state_transitions(q_bot);
+
+        std::vector<State> initial_states ({q_gamma});
+        Bit_Set leaf_states (state_cnt, {q_bot, q_sigma});
+        auto transition_fn = builder.build(state_cnt);
+        SWTA result (transition_fn, initial_states, leaf_states);
+
+        return result;
+    }
+
     throw std::runtime_error("No definition for the predefined SWTA: " + std::to_string(static_cast<u64>(name)));
 }

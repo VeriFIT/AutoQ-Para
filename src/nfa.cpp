@@ -149,3 +149,41 @@ void NFA::write_dot(std::ostream& stream) const {
     stream << "}";
 }
 
+bool are_two_complete_dfas_equivalent(const NFA& first_nfa, NFA& second_nfa) {
+    u64 alphabet_size = first_nfa.alphabet_size();
+    assert(alphabet_size == second_nfa.alphabet_size());
+
+    Worklist_Construction_Context<State_Pair> context;
+
+    {
+        State_Pair initial_pair = {.first = first_nfa.initial_states.at(0), .second = second_nfa.initial_states.at(0), .handle = 0};
+        context.mark_discovery(initial_pair);
+    }
+
+    while (!context.worklist.empty()) {
+        auto current_pair = context.extract();
+
+        bool is_final_in_first  = first_nfa.final_states.get_bit_value(current_pair->first);
+        bool is_final_in_second = second_nfa.final_states.get_bit_value(current_pair->second);
+
+        if (is_final_in_first != is_final_in_second) {
+            return false;
+        }
+
+        for (u64 color = 0; color < alphabet_size; color++) {
+            auto first_post  = first_nfa.transitions[current_pair->first][color][0];
+            auto second_post = second_nfa.transitions[current_pair->second][color][0];
+
+            State_Pair discovery = {.first = first_post, .second = second_post};
+            context.mark_discovery(discovery);
+        }
+    }
+
+    return true;
+}
+
+std::ostream& operator<<(std::ostream& os, const State_Pair& state) {
+    os << "(" << state.first << ", " << state.second << ", handle=" << state.handle << ")";
+    return os;
+}
+

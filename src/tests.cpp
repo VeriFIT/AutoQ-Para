@@ -385,6 +385,24 @@ TEST_CASE("Build frontier automaton", "[SWTA]") {
     REQUIRE(nfa.final_states == Bit_Set(3, {m2}));
 }
 
+
+TEST_CASE("Check frontiers for BV example are equivalent", "[SWTA]") {
+    auto bv_example_result = get_predefined_swta(Predefined_SWTA_Names::BV_EXAMPLE_10STAR_RESULT);
+    auto bv_example_post   = get_predefined_swta(Predefined_SWTA_Names::BV_EXAMPLE_10STAR_POST);
+
+    auto result_frontier_nfa = build_frontier_automaton(bv_example_result);
+    auto result_frontier_dfa = result_frontier_nfa.determinize();
+    result_frontier_dfa.complete();
+
+    auto post_frontier_nfa = build_frontier_automaton(bv_example_post);
+    auto post_frontier_dfa = post_frontier_nfa.determinize();
+    post_frontier_dfa.complete();
+
+    bool are_equivalent = are_two_complete_dfas_equivalent(result_frontier_dfa, post_frontier_dfa);
+    REQUIRE(are_equivalent);
+}
+
+
 TEST_CASE("Build first affine program", "[Affine programs]") {
     auto swta = get_predefined_swta(Predefined_SWTA_Names::BV_EXAMPLE_10STAR_POST);
 
@@ -393,11 +411,4 @@ TEST_CASE("Build first affine program", "[Affine programs]") {
     auto frontier_automaton = build_frontier_automaton(swta);
     auto first_program  = build_first_affine_program(swta);
     auto second_program = build_second_affine_program(first_program, frontier_automaton, metadata);
-
-    frontier_automaton.write_dot(std::cout);
-    std::cout << "\n\n";
-    write_affine_program_into_dot(std::cout, first_program);
-    std::cout << "\n\n";
-    write_affine_program_into_dot(std::cout, second_program);
-    std::cout << "\n\n";
 }

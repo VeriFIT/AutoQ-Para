@@ -115,28 +115,6 @@ std::ostream& operator<<(std::ostream& os, const WTT& wtt) {
     return os;
 }
 
-struct State_Pair {
-    State first, second;
-    State handle = -1;
-
-    /**
-     * Lexigraphical ordering.
-     */
-    bool operator<(const State_Pair& other) const {
-        if (this->first < other.first)
-            return true;
-        else if (this->first > other.first)
-            return false;
-        return this->second < other.second;
-    }
-};
-
-std::ostream& operator<<(std::ostream& os, const State_Pair& state) {
-    os << "(" << state.first << ", " << state.second << ", handle=" << state.handle << ")";
-    return os;
-}
-
-
 void extend_form_with_product_and_node_discoveries(Linear_Form& destination, const Linear_Form& first, const Linear_Form& second, std::map<State_Pair, u64>& handles, std::vector<State_Pair>& worklist) {
     for (auto& outer_comp : second.components) {
         for (auto& inner_comp : first.components) {
@@ -665,6 +643,64 @@ void extend_affine_program_with_post(const Macrostate& macrostate, Affine_Progra
     }
 }
 
+void rename_linear_form_states(Linear_Form& form, State state_offset) {
+    for (auto& component : form.components) {
+        component.state += state_offset;
+    }
+}
+
+
+SWTA build_difference_swta(const SWTA& first, const SWTA& second) {
+    SWTA::Transition_Fn resulting_transitions;
+    u64 resulting_state_cnt = 1 + first.number_of_states() + second.number_of_states();
+    resulting_transitions.resize(resulting_state_cnt);
+
+    for (State first_state = 0; first_state < first.number_of_states(); first_state++) {
+        resulting_transitions[first_state] = first.transitions[first_state];
+    }
+
+    u64 offset = first.number_of_states();
+    for (State second_state = 0; second_state < second.number_of_states(); second_state++) {
+        State new_second_state = second_state + offset;
+        resulting_transitions[new_second_state] = second.transitions[second_state];
+
+        for (auto& transition_along_symbol : resulting_transitions[new_second_state]) {
+            for (auto& transition_along_color : transition_along_symbol) {
+                rename_linear_form_states(transition_along_color.left,  offset);
+                rename_linear_form_states(transition_along_color.right, offset);
+            }
+        }
+    }
+
+    State new_initial_state = first.number_of_states() + second.number_of_states();
+    { // Add transition (different) from the new initial state
+        resulting_transitions[new_initial_state].resize(first.number_of_internal_symbols());
+
+        for (Internal_Symbol symbol = 0; symbol < first.number_of_internal_symbols(); symbol++) {
+            resulting_transitions[new_initial_state][symbol].resize(first.number_of_colors());
+        }
+
+        Linear_Form::Component first_init_component (Algebraic_Complex_Number::ONE(), first.initial_states[0]);
+        Linear_Form::Component second_init_component (-Algebraic_Complex_Number::ONE(), second.initial_states[0]);
+
+        Linear_Form form ({first_init_component, second_init_component});
+        resulting_transitions[new_initial_state][0][0] = SWTA::Transition(form, form);
+    }
+
+    Bit_Set new_final_states (resulting_state_cnt);
+    for (u64 bucket_idx = 0; bucket_idx < first.states_with_leaf_transitions.get_bucket_count(); bucket_idx++) {
+        new_final_states.data[bucket_idx] = first.states_with_leaf_transitions.data[bucket_idx];
+    }
+
+    for (State second_state = 0; second_state < second.number_of_states(); second_state++) {
+        if (second.states_with_leaf_transitions.get_bit_value(second_state)) {
+            new_final_states.set_bit(second_state + offset);
+        }
+    }
+
+    return SWTA(resulting_transitions, {new_initial_state}, new_final_states);
+}
+
 Affine_Program build_first_affine_program(const SWTA& swta) {
     auto [symbol_handles, symbol_store] = extract_transition_matrices_from_swta(swta);
     AP_Build_Context build_context (swta, std::move(symbol_handles), std::move(symbol_store));
@@ -737,31 +773,6 @@ std::ostream& operator<<(std::ostream& os, const Affine_Program::Transition_Symb
     os << info.symbol << "-" << info.color << "-" << tag_name;
     return os;
 }
-
-template <typename T>
-struct Worklist_Construction_Context {
-    std::map<T, u64>      handles;
-    std::vector<const T*> worklist;
-
-    const T* extract() {
-        auto elem = worklist.back();
-        worklist.pop_back();
-        return elem;
-    }
-
-    const T* mark_discovery(T& discovery) {
-        discovery.handle = this->handles.size();
-        auto [insert_pos, was_inserted] = this->handles.emplace(discovery, discovery.handle);
-
-        const T* result_ptr = &insert_pos->first;
-
-        if (was_inserted) {
-            this->worklist.push_back(result_ptr);
-        }
-
-        return result_ptr;
-    }
-};
 
 struct Second_Affine_Program_Build_Context {
     Worklist_Construction_Context<State_Pair> worklist_constr_ctx;
@@ -838,4 +849,45 @@ Affine_Program build_second_affine_program(const Affine_Program& first_program, 
     });
 
     return result;
+}
+
+NFA build_color_language_abstraction(const SWTA& swta) {
+    auto abstraction_nfa = build_frontier_automaton(swta);
+    auto abstraction_dfa = abstraction_nfa.determinize();
+    abstraction_dfa.complete();
+    return std::move(abstraction_dfa);
+}
+
+bool are_two_swtas_color_equivalent(const SWTA& first, const SWTA& second) {
+    NFA first_swta_abstraction  = build_color_language_abstraction(first);
+    NFA second_swta_abstraction = build_color_language_abstraction(second);
+    bool are_colored_languages_equivalent = are_two_complete_dfas_equivalent(first_swta_abstraction, second_swta_abstraction);
+
+    if (!are_colored_languages_equivalent) return false;
+
+    {
+        State old_initial_state = first_swta_abstraction.initial_states[0];
+        State new_initial_state = first_swta_abstraction.number_of_states();
+
+        first_swta_abstraction.initial_states.clear();
+        first_swta_abstraction.initial_states.push_back(new_initial_state);
+
+        std::vector<std::vector<State>> transitions_from_new_state {{old_initial_state}};
+        first_swta_abstraction.transitions.push_back(transitions_from_new_state);
+    }
+
+    SWTA difference_swta = build_difference_swta(first, second);
+    SWTA::Metadata metadata = difference_swta.get_metadata();
+
+    Affine_Program first_program  = build_first_affine_program(difference_swta);
+    Affine_Program second_program = build_second_affine_program(first_program, first_swta_abstraction, metadata);
+
+    bool are_equivalent = !does_affine_program_reach_nonzero_final_states(second_program);
+
+    return are_equivalent;
+}
+
+bool does_affine_program_reach_nonzero_final_states(const Affine_Program& program) {
+    throw std::runtime_error("Not implemented!");   // @Todo
+    return false;
 }

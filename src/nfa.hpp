@@ -137,5 +137,48 @@ struct Macrostate {
     }
 };
 
+template <typename T>
+struct Worklist_Construction_Context {
+    std::map<T, u64>      handles;
+    std::vector<const T*> worklist;
+
+    const T* extract() {
+        auto elem = worklist.back();
+        worklist.pop_back();
+        return elem;
+    }
+
+    const T* mark_discovery(T& discovery) {
+        discovery.handle = this->handles.size();
+        auto [insert_pos, was_inserted] = this->handles.emplace(discovery, discovery.handle);
+
+        const T* result_ptr = &insert_pos->first;
+
+        if (was_inserted) {
+            this->worklist.push_back(result_ptr);
+        }
+
+        return result_ptr;
+    }
+};
+
+struct State_Pair {
+    u64 first, second;
+    u64 handle = -1;
+
+    /**
+     * Lexigraphical ordering.
+     */
+    bool operator<(const State_Pair& other) const {
+        if (this->first < other.first)
+            return true;
+        else if (this->first > other.first)
+            return false;
+        return this->second < other.second;
+    }
+};
+
+std::ostream& operator<<(std::ostream& os, const State_Pair& state);
 std::ostream& operator<<(std::ostream& os, const Macrostate& macrostate);
 
+bool are_two_complete_dfas_equivalent(const NFA& first_nfa, NFA& other_nfa);

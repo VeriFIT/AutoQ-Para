@@ -183,12 +183,12 @@ struct SWTA {
     std::vector<State> initial_states;
     Bit_Set            states_with_leaf_transitions;
 
-    SWTA(const Transition_Fn& aut_transitions, std::vector<State>& init_states, const Bit_Set& final_state_set) :
+    SWTA(const Transition_Fn& aut_transitions, const std::vector<State>& init_states, const Bit_Set& final_state_set) :
         transitions(aut_transitions),
         initial_states(init_states),
         states_with_leaf_transitions(final_state_set) {}
 
-    SWTA(const Transition_Fn& aut_transitions, std::vector<State>& init_states, const std::vector<State>& final_state_set) :
+    SWTA(const Transition_Fn& aut_transitions, const std::vector<State>& init_states, const std::vector<State>& final_state_set) :
         transitions(aut_transitions),
         initial_states(init_states),
         states_with_leaf_transitions(aut_transitions.size(), final_state_set) {}
@@ -461,5 +461,10 @@ std::ostream& operator<<(std::ostream& os, const Affine_Program::Transition_Symb
 
 void write_affine_program_into_dot(std::ostream& stream, const Affine_Program& program);
 
+SWTA build_difference_swta(const SWTA& first, const SWTA& second);
 Affine_Program build_first_affine_program(const SWTA& swta);
 Affine_Program build_second_affine_program(const Affine_Program& first_program, const NFA& frontier_automaton, const SWTA::Metadata& metadata);
+
+bool are_two_swtas_color_equivalent(const SWTA& first, const SWTA& second);
+
+bool does_affine_program_reach_nonzero_final_states(const Affine_Program& program);

@@ -286,6 +286,9 @@ struct Algebraic_Complex_Number {
         float real = static_cast<float>(mpz_get_si(this->a)) + one_over_sqrt2*(static_cast<float>(mpz_get_si(b)) - static_cast<float>(mpz_get_si(this->d)));
         float im   = static_cast<float>(mpz_get_si(this->c)) + one_over_sqrt2*(static_cast<float>(mpz_get_si(b)) + static_cast<float>(mpz_get_si(this->d)));
 
+        real *= std::pow(one_over_sqrt2, mpz_get_si(this->k));
+        im   *= std::pow(one_over_sqrt2, mpz_get_si(this->k));
+
         return {.real = real, .im = im};
     }
 
