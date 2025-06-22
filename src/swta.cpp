@@ -258,10 +258,11 @@ Macrostate compute_post(const Macrostate* macrostate, const SWTA& swta, Color co
 
     for (State state : macrostate->state_names) {
         auto& transitions_from_state = swta.transitions[state];
-        auto& transitions_for_color  = transitions_from_state[color];
 
         for (Internal_Symbol sym = 0; sym < swta.number_of_internal_symbols(); sym++) {
-            auto& transition = transitions_for_color[sym];
+
+            auto& transitions_for_sym = transitions_from_state[sym];
+            auto& transition          = transitions_for_sym[color];
 
             if (!transition.is_present()) {
                 post.state_set.clear();
@@ -408,7 +409,17 @@ NFA build_frontier_automaton(const Tree_Transition_System& tts, s64 root) {
         ordered_resulting_transitions[state] = transitions_from_state;
     }
 
-    return NFA({0}, final_macrostates, ordered_resulting_transitions);
+    NFA result ({0}, final_macrostates, ordered_resulting_transitions);
+
+    do_on_debug({
+        result.debug_data = new NFA::Debug_Data;
+
+        for (auto& [macrostate, handle] : handles) {
+            result.debug_data->state_names.emplace(handle, macrostate.to_string());
+        }
+    });
+
+    return result;
 }
 
 template
@@ -634,13 +645,6 @@ void compute_post_and_store_result_in_ap(const Macrostate& macrostate, const Lin
         post.handle = insert_pos->second;
     }
 
-    if (post.handle == 3) {
-        std::cout << context.swta << "\n";
-        for (auto& [m, h] : context.macrostate_handles) {
-            std::cout << m << "  ->  " << h << "\n";
-        }
-    }
-
     u64 symbol_handle = context.builder.symbol_handles.at(symbol_info);
     context.builder.add_transition(macrostate.handle, symbol_handle, post.handle);
 }
@@ -671,6 +675,8 @@ Affine_Program build_first_affine_program(const SWTA& swta) {
 
         build_context.macrostate_handles.emplace(init_macrostate, init_macrostate.handle);
         build_context.worklist.push_back(init_macrostate);
+
+        build_context.builder.mark_state_initial(init_macrostate.handle);
     }
 
     while (!build_context.worklist.empty()) {
@@ -690,8 +696,8 @@ Affine_Program build_first_affine_program(const SWTA& swta) {
 
     do_on_debug({
         program.debug_data = new Affine_Program::Debug_Data;
-        for (auto [macrostate, handle] : build_context.macrostate_handles) {
-            program.debug_data->state_names.emplace(handle, std::move(macrostate));
+        for (auto& [macrostate, handle] : build_context.macrostate_handles) {
+            program.debug_data->state_names.emplace(handle, macrostate.to_string());
         }
     });
 
@@ -701,13 +707,17 @@ Affine_Program build_first_affine_program(const SWTA& swta) {
 void write_affine_program_into_dot(std::ostream& stream, const Affine_Program& program) {
     stream << "digraph Affine_Program {\n";
 
+    stream << "  qInit [shape=none, label=\"\"]\n";
     for (State state = 0; state < program.number_of_states(); state++) {
         stream << "  q" << state;
         if (program.debug_data != nullptr && program.debug_data->state_names.contains(state)) {
-            stream << " [label=\"" << program.debug_data->state_names.at(state) << "\"]";
+            const char* color = program.final_states.get_bit_value(state) ? "green" : "black";
+            stream << " [label=\"" << program.debug_data->state_names.at(state) << "\", color=" << color << "]";
         }
         stream << "\n";
     }
+
+    stream << "  qInit -> q" << program.initial_state << "\n";
 
     for (State state = 0; state < program.number_of_states(); state++) {
         for (u64 symbol = 0; symbol < program.transition_fn[state].size(); symbol++) {
@@ -738,19 +748,94 @@ struct Worklist_Construction_Context {
         worklist.pop_back();
         return elem;
     }
+
+    const T* mark_discovery(T& discovery) {
+        discovery.handle = this->handles.size();
+        auto [insert_pos, was_inserted] = this->handles.emplace(discovery, discovery.handle);
+
+        const T* result_ptr = &insert_pos->first;
+
+        if (was_inserted) {
+            this->worklist.push_back(result_ptr);
+        }
+
+        return result_ptr;
+    }
 };
 
-void build_second_affine_program(const Affine_Program& first_program, const NFA& frontier_automaton, const SWTA::Metadata& metadata) {
-    Worklist_Construction_Context<State_Pair> context;
+struct Second_Affine_Program_Build_Context {
+    Worklist_Construction_Context<State_Pair> worklist_constr_ctx;
+    const SWTA::Metadata&  metadata;
+    const Affine_Program&  affine_program;
+    const NFA&             frontier_nfa;
+    Affine_Program_Builder program_builder;
+
+    Second_Affine_Program_Build_Context(const SWTA::Metadata& metadata, const Affine_Program& program, const NFA& frontier) :
+        metadata(metadata), affine_program(program), frontier_nfa(frontier), program_builder(program.symbol_handles, program.symbol_store) {}
+
+};
+
+void compute_ap_frontier_post_along_symbol(Second_Affine_Program_Build_Context& context, const State_Pair* current_state, Affine_Program::Transition_Symbol_Info& symbol_info) {
+    u64 ap_symbol_handle = context.affine_program.symbol_handles.at(symbol_info);
+
+    State nfa_state = current_state->second, ap_state = current_state->first;
+
+    for (State nfa_post : context.frontier_nfa.transitions[nfa_state][symbol_info.color]) {
+        for (State ap_post : context.affine_program.transition_fn[ap_state][ap_symbol_handle]) {
+            State_Pair imm_post = {.first = ap_post, .second = nfa_post, .handle = context.worklist_constr_ctx.handles.size() };
+            auto post = context.worklist_constr_ctx.mark_discovery(imm_post);
+
+            context.program_builder.add_transition(current_state->handle, ap_symbol_handle, post->handle);
+        }
+    }
+}
+
+Affine_Program build_second_affine_program(const Affine_Program& first_program, const NFA& frontier_automaton, const SWTA::Metadata& metadata) {
+    Second_Affine_Program_Build_Context context(metadata, first_program, frontier_automaton);
 
     {
         State_Pair initial_pair {.first = first_program.initial_state, .second = frontier_automaton.initial_states[0], .handle = 0};
-        auto [insert_pos, was_inserted] = context.handles.emplace(initial_pair, 0);
-        context.worklist.push_back(&insert_pos->first);
+        auto [insert_pos, was_inserted] = context.worklist_constr_ctx.handles.emplace(initial_pair, 0);
+        context.worklist_constr_ctx.worklist.push_back(&insert_pos->first);
+
+        context.program_builder.mark_state_initial(initial_pair.handle);
     }
 
-    while (!context.worklist.empty()) {
-        auto state_pair = context.extract();
-        // @Todo
+    while (!context.worklist_constr_ctx.worklist.empty()) {
+        auto state_pair = context.worklist_constr_ctx.extract();
+
+        State ap_state = state_pair->first;
+        State nfa_state = state_pair->second;
+
+        if (context.frontier_nfa.final_states.get_bit_value(nfa_state)) {
+            context.program_builder.mark_state_final(state_pair->handle);
+        }
+
+
+        for (Color color = 0; color < metadata.number_of_colors; color++) {
+            for (Internal_Symbol sym = 0; sym < context.metadata.number_of_internal_symbols; sym++) {
+                Affine_Program::Transition_Symbol_Info left_symbol_info (sym, color, Subtree_Tag::LEFT);
+                compute_ap_frontier_post_along_symbol(context, state_pair, left_symbol_info);
+
+                Affine_Program::Transition_Symbol_Info right_symbol_info (sym, color, Subtree_Tag::RIGHT);
+                compute_ap_frontier_post_along_symbol(context, state_pair, right_symbol_info);
+            }
+        }
     }
+
+    Affine_Program result = context.program_builder.build(context.worklist_constr_ctx.handles.size());
+
+    do_on_debug({
+        result.debug_data = new Affine_Program::Debug_Data;
+        for (auto& [state_pair, handle] : context.worklist_constr_ctx.handles) {
+
+            std::string ap_name = context.affine_program.debug_data->state_names.at(state_pair.first);
+            std::string nfa_name = context.frontier_nfa.debug_data->state_names.at(state_pair.second);
+            std::string pair_name = "<AP=" + ap_name + ", F=" + nfa_name + ">";
+
+            result.debug_data->state_names.emplace(handle, pair_name);
+        }
+    });
+
+    return result;
 }

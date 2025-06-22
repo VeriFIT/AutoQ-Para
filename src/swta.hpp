@@ -341,7 +341,7 @@ struct Affine_Program {
     };
 
     struct Debug_Data {
-         std::map<State, Macrostate> state_names;
+         std::map<State, std::string> state_names;
     };
 
     struct Transition_Symbol {
@@ -368,6 +368,18 @@ struct Affine_Program {
 
     Affine_Program(Transition_Fn& transitions, Bit_Set& final_states, State initial_state, Symbol_Handles& handles, Symbol_Store& store) : transition_fn(transitions), symbol_handles(handles), symbol_store(store), final_states(final_states), initial_state(initial_state) {}
 
+    Affine_Program(const Affine_Program& other) :
+        transition_fn(other.transition_fn),
+        final_states(other.final_states),
+        initial_state(other.initial_state),
+        symbol_handles(other.symbol_handles),
+        symbol_store(other.symbol_store)
+    {
+        if (other.debug_data != nullptr) {
+            this->debug_data = new Debug_Data(*other.debug_data);
+        }
+    }
+
     u64 number_of_states() const {
         return this->transition_fn.size();
     }
@@ -386,7 +398,7 @@ struct Affine_Program_Builder {
     Affine_Program::Symbol_Handles symbol_handles;
     Affine_Program::Symbol_Store   symbol_store;
     Bit_Set                        final_states;
-    State                          initial_state;
+    s64                            initial_state = -1;
 
     std::map<State, Affine_Program::Transitions_From_State> pending_transitions;
 
@@ -410,9 +422,15 @@ struct Affine_Program_Builder {
         this->initial_state = state;
     }
 
+    void check_all_fields_filled_out() {
+        if (this->initial_state < 0) throw std::runtime_error("Initial state is not set when attempting to build an affine program!");
+    }
+
     Affine_Program build(s64 state_cnt = -1) {
+        check_all_fields_filled_out();
+
         // Some states might not have transitions, so we have to be careful if making decisions around the number of states based solely on discovered transitions.
-        state_cnt = state_cnt > 0 ? state_cnt : this->pending_transitions.rbegin()->first;
+        state_cnt = state_cnt > 0 ? state_cnt : this->pending_transitions.rbegin()->first + 1;
 
         Affine_Program::Transition_Fn transitions;
         transitions.resize(state_cnt);
@@ -444,4 +462,4 @@ std::ostream& operator<<(std::ostream& os, const Affine_Program::Transition_Symb
 void write_affine_program_into_dot(std::ostream& stream, const Affine_Program& program);
 
 Affine_Program build_first_affine_program(const SWTA& swta);
-void build_second_affine_program(const Affine_Program& first_program, const NFA& frontier_automaton);
+Affine_Program build_second_affine_program(const Affine_Program& first_program, const NFA& frontier_automaton, const SWTA::Metadata& metadata);

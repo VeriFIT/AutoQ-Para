@@ -30,6 +30,34 @@ Macrostate compute_post(const Macrostate* macrostate, const NFA& nfa, u64 symbol
     return post;
 }
 
+bool NFA::complete() {
+    u64 state_cnt = this->number_of_states();
+    State sink_state = state_cnt;
+
+    bool was_sink_state_needed = false;
+    for (State state = 0; state < state_cnt; state++) {
+        for (u64 color = 0; color < this->alphabet_size(); color++) {
+            if (this->transitions[state][color].empty()) {
+                this->transitions[state][color].push_back(sink_state);
+                was_sink_state_needed = true;
+            }
+        }
+    }
+
+    if (was_sink_state_needed) {
+        std::vector<std::vector<State>> sink_state_transitions;
+        sink_state_transitions.resize(this->alphabet_size());
+
+        for (u64 color = 0; color < this->alphabet_size(); color++) {
+            sink_state_transitions[color].push_back(sink_state);
+        }
+
+        this->transitions.push_back(sink_state_transitions);
+    }
+
+    return was_sink_state_needed;
+}
+
 NFA NFA::determinize() const {
     std::map<Macrostate, NFA::State> handles;
 
@@ -91,3 +119,33 @@ NFA NFA::determinize() const {
 bool NFA::is_every_state_accepting() const {
     return this->final_states.are_all_bits_set();
 }
+
+void NFA::write_dot(std::ostream& stream) const {
+    stream << "digraph NFA {\n";
+
+    for (State initial_state : this->initial_states) {
+        stream << "  qInit" << initial_state << " [shape=none, label=\"\"]\n";
+    }
+    for (State state = 0; state < this->number_of_states(); state++) {
+        stream << "  q" << state;
+        if (this->debug_data != nullptr && this->debug_data->state_names.contains(state)) {
+            stream << " [label=\"" << this->debug_data->state_names.at(state) << "\"]";
+        }
+        stream << "\n";
+    }
+
+    for (State initial_state : this->initial_states) {
+        stream << "  qInit" << initial_state << " -> q" << initial_state << "\n";
+    }
+
+    for (State state = 0; state < number_of_states(); state++) {
+        for (u64 symbol = 0; symbol < transitions[state].size(); symbol++) {
+            for (State destination : transitions[state][symbol]) {
+                stream << "  q" << state << " -> q" << destination << " [label=\"" << symbol << "\"]\n";
+            }
+        }
+    }
+
+    stream << "}";
+}
+

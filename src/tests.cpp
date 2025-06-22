@@ -387,6 +387,17 @@ TEST_CASE("Build frontier automaton", "[SWTA]") {
 
 TEST_CASE("Build first affine program", "[Affine programs]") {
     auto swta = get_predefined_swta(Predefined_SWTA_Names::BV_EXAMPLE_10STAR_POST);
-    auto affine_program = build_first_affine_program(swta);
-    write_affine_program_into_dot(std::cout, affine_program);
+
+    SWTA::Metadata metadata = swta.get_metadata();
+
+    auto frontier_automaton = build_frontier_automaton(swta);
+    auto first_program  = build_first_affine_program(swta);
+    auto second_program = build_second_affine_program(first_program, frontier_automaton, metadata);
+
+    frontier_automaton.write_dot(std::cout);
+    std::cout << "\n\n";
+    write_affine_program_into_dot(std::cout, first_program);
+    std::cout << "\n\n";
+    write_affine_program_into_dot(std::cout, second_program);
+    std::cout << "\n\n";
 }

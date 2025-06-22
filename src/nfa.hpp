@@ -3,14 +3,39 @@
 #include "arith.hpp"
 #include "bit_set.hpp"
 
+#include <map>
+#include <string>
+#include <sstream>
+
+namespace std {
+    template <typename T>
+    ostream& operator<<(ostream& os, std::vector<T> vec) {
+        os << "[";
+        for (u64 idx = 0; idx < vec.size(); idx++) {
+            auto& elem = vec[idx];
+            os << elem;
+            if (idx + 1 != vec.size()) {
+                os << ", ";
+            }
+        }
+        os << "]";
+        return os;
+    }
+}
 
 struct NFA {
     using State = u64;
     using Transitions_From_State = std::vector<std::vector<State>>;
+    using Transition_Fn = std::vector<Transitions_From_State>;
+
+    struct Debug_Data {
+        std::map<State, std::string> state_names;
+    };
 
     std::vector<State> initial_states;
-    Bit_Set final_states;
-    std::vector<Transitions_From_State> transitions;
+    Bit_Set            final_states;
+    Transition_Fn      transitions;
+    Debug_Data*        debug_data = nullptr;
 
     NFA() : initial_states({}), final_states(0), transitions({}) {}
     NFA(const std::vector<State>& init_states, const std::vector<State>& fin_states, const std::vector<Transitions_From_State>& aut_transitions) :
@@ -23,10 +48,25 @@ struct NFA {
         }
     }
 
+    NFA(const NFA& other) :
+        initial_states(other.initial_states),
+        final_states(other.final_states),
+        transitions(other.transitions)
+    {
+        if (other.debug_data != nullptr) {
+            this->debug_data = new Debug_Data(*other.debug_data);
+        }
+    };
+
     NFA(const std::vector<State>& init_states, const Bit_Set& fin_states, const std::vector<Transitions_From_State>& aut_transitions) :
         initial_states(init_states),
         final_states(fin_states),
         transitions(aut_transitions) {}
+
+    ~NFA() {
+        if (this->debug_data != nullptr) delete this->debug_data;
+        this->debug_data = nullptr;
+    }
 
     u64 number_of_states() const {
         return this->transitions.size();
@@ -37,7 +77,9 @@ struct NFA {
     }
 
     NFA determinize() const;
+    bool complete();
     bool is_every_state_accepting() const;
+    void write_dot(std::ostream& stream) const;
 };
 
 
@@ -87,23 +129,13 @@ struct Macrostate {
             }
         }
     }
-};
 
-namespace std {
-    template <typename T>
-    ostream& operator<<(ostream& os, std::vector<T> vec) {
-        os << "[";
-        for (u64 idx = 0; idx < vec.size(); idx++) {
-            auto& elem = vec[idx];
-            std::cout << elem;
-            if (idx + 1 != vec.size()) {
-                os << ", ";
-            }
-        }
-        os << "]";
-        return os;
+    std::string to_string() const {
+        std::stringstream ss;
+        ss << "Macrostate " << state_names << " (handle=" << handle << ")";
+        return ss.str();
     }
-}
+};
 
 std::ostream& operator<<(std::ostream& os, const Macrostate& macrostate);
 
