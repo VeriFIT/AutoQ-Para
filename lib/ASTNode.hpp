@@ -153,9 +153,12 @@ using GateOperand = pair<string, optional<vector<vector<shared_ptr<ASTNode>>>>>;
 struct GateCallNode : ASTNode
 {
     string name;
+    ASTNodeList gate_args;
     vector<GateOperand> operand_list;
+    GateCallNode(string g, ASTNodeList args, vector<GateOperand> operand_list)
+        : name(g), gate_args(move(args)), operand_list(move(operand_list)) {}
     GateCallNode(string g, vector<GateOperand> operand_list)
-        : name(g), operand_list(operand_list) {}
+        : name(g), operand_list(move(operand_list)) {}
     ASTKind kind() const override { return ASTKind::GateCall; }
     void print(int indent = 0) const override
     {
@@ -183,7 +186,17 @@ struct GateCallNode : ASTNode
             return s;
         };
 
-        cout << string(indent, ' ') << "GateCall(" << name << ", argv=(";
+        cout << string(indent, ' ') << "GateCall(" << name;
+        cout << ", gate_argv=(";
+        for (size_t i = 0; i < gate_args.size(); ++i)
+        {
+            auto s = dynamic_pointer_cast<CanShow>(gate_args[i]);
+            cout << (s ? s->toString() : "?");
+            if (i + 1 < gate_args.size())
+                cout << ",";
+        }
+        cout << ")";
+        cout << ", argv=(";
         for (size_t i = 0; i < operand_list.size(); ++i)
         {
             cout << operandToString(operand_list[i]);
@@ -532,11 +545,17 @@ GateOperand gateoperand(const string &key, Exprss &&...exprs)
 }
 
 template <typename... Operands>
-auto gatecall(const string &gate, Operands &&...ops)
+auto gatecall(const string &gate, const ASTNodeList &args, Operands &&...ops)
 {
     vector<GateOperand> v;
     (v.push_back(forward<Operands>(ops)), ...);
-    return make_shared<GateCallNode>(gate, move(v));
+    return make_shared<GateCallNode>(gate, args, move(v));
+}
+
+template <typename... Operands>
+auto gatecall(const string &gate, Operands &&...ops)
+{
+    return gatecall(gate, {}, forward<Operands>(ops)...);
 }
 
 inline ASTNodeList astn_vec(const ASTNodeList &v)
@@ -549,9 +568,15 @@ inline GateOperand gateoperand_vec(const string &key, const vector<vector<ASTNod
     return {key, v.empty() ? nullopt : make_optional(v)};
 }
 
+inline shared_ptr<GateCallNode> gatecall_vec(const string &gate, const ASTNodeList &args,
+                                             const vector<GateOperand> &gq_list)
+{
+    return make_shared<GateCallNode>(gate, args, gq_list);
+}
+
 inline shared_ptr<GateCallNode> gatecall_vec(const string &gate, const vector<GateOperand> &gq_list)
 {
-    return make_shared<GateCallNode>(gate, gq_list);
+    return make_shared<GateCallNode>(gate, ASTNodeList{}, gq_list);
 }
 
 inline shared_ptr<GateStmtNode> gate_stmt(const string &name, const ASTNodeList &params,

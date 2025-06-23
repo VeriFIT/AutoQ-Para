@@ -101,7 +101,13 @@ any ASTBuilder::visitGateCallStatement(qasm3Parser::GateCallStatementContext *ct
         assert(ret.type() == typeid(GateOperand));
         operands.push_back(any_cast<GateOperand>(ret));
     }
-    return (ASTNodePtr)gatecall_vec(ctx->Identifier()->getText(), operands);
+    ASTNodeList gateArgs;
+    if (ctx->expressionList())
+    {
+        for (auto exprCtx : ctx->expressionList()->expression())
+            gateArgs.push_back(toAst(exprCtx));
+    }
+    return (ASTNodePtr)gatecall_vec(ctx->Identifier()->getText(), gateArgs, operands);
 }
 
 any ASTBuilder::visitMeasureArrowAssignmentStatement(qasm3Parser::MeasureArrowAssignmentStatementContext *ctx)
