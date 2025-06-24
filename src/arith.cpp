@@ -39,13 +39,10 @@ std::ostream& operator<<(std::ostream& os, const Fixed_Precision_ACN& number) {
     return os;
 }
 
-s64 add_row_to_row_echelon_matrix(ACN_Matrix& matrix, ACN_Matrix& in_row) {
-    assert(matrix.width == in_row.width);
-    assert(in_row.height == 1);
+s64 add_row_to_row_echelon_matrix_no_copy(ACN_Matrix& matrix, ACN_Matrix& row) {
+    assert(matrix.width == row.width);
 
-    if (in_row.contains_only_zeros()) return -1;
-
-    ACN_Matrix row (in_row); // Make a local copy, since we will be modifying it
+    if (row.contains_only_zeros()) return -1;
 
     u64 inserted_row_pivot_idx = row.find_nonzero_elem_in_row(0);
 
@@ -68,7 +65,12 @@ s64 add_row_to_row_echelon_matrix(ACN_Matrix& matrix, ACN_Matrix& in_row) {
         auto& matrix_pivot = matrix.at(row_idx, row_pivot_idx);
         auto& row_pivot    = row.at(0, inserted_row_pivot_idx);
 
-        row.subtract_from_ith_row(0, matrix_pivot, matrix, row_idx, row_pivot);
+        row.subtract_from_ith_row(
+            0,             // Which row of the `row` matrix to subtract from
+            matrix_pivot,  // What coefficient should multiply the row before multiplication
+            matrix,        // Matrix containing rows that we can subtract from
+            row_idx,       // Which of the matrix rows are we subtracting
+            row_pivot);    // What coeffcient should multiply the row
 
         inserted_row_pivot_idx = row.find_nonzero_elem_in_row(0);
 
@@ -78,6 +80,15 @@ s64 add_row_to_row_echelon_matrix(ACN_Matrix& matrix, ACN_Matrix& in_row) {
     }
 
     assert(false);  // Should be unreachable - the row is indepentent and we insert it, or our matrix has full rank and hence we do not insert it
+}
+
+s64 add_row_to_row_echelon_matrix(ACN_Matrix& matrix, const ACN_Matrix& row) {
+    ACN_Matrix row_copy (1, row.width); // Make a local copy, since we will be modifying it
+    for (auto row_elem_idx = 0; row_elem_idx < row.width; row_elem_idx++) {
+        auto& elem_value = row.at(0, row_elem_idx);
+        row_copy.set(0, row_elem_idx, elem_value);
+    }
+    return add_row_to_row_echelon_matrix_no_copy(matrix, row_copy);
 }
 
 u64 compute_square_matrix_dim_from_1d_repr(const std::vector<s64>& repr) {
@@ -190,12 +201,14 @@ std::ostream& operator<<(std::ostream& os, const Direct_ACN& number) {
 
 
 std::ostream& operator<<(std::ostream& os, const ACN_Matrix& matrix) {
-    os << "[\n";
+    os << "[";
+    if (matrix.height > 1) os << "\n";
     for (u64 row_idx = 0; row_idx < matrix.height; row_idx++) {
         for (u64 col_idx = 0; col_idx < matrix.width; col_idx++) {
             os << matrix.at(row_idx, col_idx) << ", ";
         }
-        os << "\n";
+
+        if (matrix.height > 1) os << "\n";
     }
     os << "]";
 

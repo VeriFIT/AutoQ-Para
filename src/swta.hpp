@@ -3,16 +3,11 @@
 #include "arith.hpp"
 #include "bit_set.hpp"
 #include "nfa.hpp"
+#include "basics.hpp"
 
+#include <future>
 #include <map>
 #include <vector>
-
-#define DEBUG 1
-#if DEBUG
-#define do_on_debug(code) { code };
-#else
-#define do_on_debug(code) { };
-#endif
 
 typedef u64 Color;
 typedef u64 State;
@@ -321,35 +316,36 @@ enum class Subtree_Tag : u64 {
     RIGHT = 2,
 };
 
+struct Branch_Selector {
+    Internal_Symbol symbol;
+    Color           color;
+    Subtree_Tag     tag;
+
+    Branch_Selector(Internal_Symbol sym, Color col, Subtree_Tag subtree_tag) : symbol(sym), color(col), tag(subtree_tag) {}
+
+    bool operator<(const Branch_Selector& other) const {
+        if (symbol < other.symbol) return true;
+        if (symbol > other.symbol) return false;
+
+        if (color < other.color) return true;
+        if (color > other.color) return false;
+
+        return static_cast<u64>(this->tag) < static_cast<u64>(other.tag);
+    }
+};
+
+template <typename Transition_Tag>
 struct Affine_Program {
-    struct Transition_Symbol_Info {
-        Internal_Symbol symbol;
-        Color           color;
-        Subtree_Tag     tag;
-
-        Transition_Symbol_Info(Internal_Symbol sym, Color col, Subtree_Tag subtree_tag) : symbol(sym), color(col), tag(subtree_tag) {}
-
-        bool operator<(const Transition_Symbol_Info& other) const {
-            if (symbol < other.symbol) return true;
-            if (symbol > other.symbol) return false;
-
-            if (color < other.color) return true;
-            if (color > other.color) return false;
-
-            return static_cast<u64>(this->tag) < static_cast<u64>(other.tag);
-        }
-    };
-
     struct Debug_Data {
          std::map<State, std::string> state_names;
     };
 
     struct Transition_Symbol {
-        Transition_Symbol_Info info;
-        ACN_Matrix             matrix;
+        Transition_Tag info;
+        ACN_Matrix     matrix;
     };
 
-    using Symbol_Handles = std::map<Affine_Program::Transition_Symbol_Info, u64>;
+    using Symbol_Handles = std::map<Transition_Tag, u64>;
     using Symbol_Store   = std::vector<Transition_Symbol>;
 
     /**
@@ -357,7 +353,7 @@ struct Affine_Program {
      * be non-deterministic.
      */
     using Transitions_From_State = std::vector<std::vector<State>>;
-    using Transition_Fn         = std::vector<Transitions_From_State>;  // Indexed by states
+    using Transition_Fn          = std::vector<Transitions_From_State>;  // Indexed by states
 
     Transition_Fn  transition_fn;
     Bit_Set        final_states;
@@ -394,15 +390,19 @@ struct Affine_Program {
     }
 };
 
+template <typename Transition_Tag>
 struct Affine_Program_Builder {
-    Affine_Program::Symbol_Handles symbol_handles;
-    Affine_Program::Symbol_Store   symbol_store;
+    Affine_Program<Transition_Tag>::Symbol_Handles symbol_handles;
+    Affine_Program<Transition_Tag>::Symbol_Store   symbol_store;
     Bit_Set                        final_states;
     s64                            initial_state = -1;
 
-    std::map<State, Affine_Program::Transitions_From_State> pending_transitions;
+    std::map<State, typename Affine_Program<Transition_Tag>::Transitions_From_State> pending_transitions;
 
-    Affine_Program_Builder (const Affine_Program::Symbol_Handles& handles, const Affine_Program::Symbol_Store& store) : symbol_handles(handles), symbol_store(store), final_states(0) {}
+    Affine_Program_Builder (const Affine_Program<Transition_Tag>::Symbol_Handles& handles, const Affine_Program<Transition_Tag>::Symbol_Store& store) :
+        symbol_handles(handles),
+        symbol_store(store),
+        final_states(0) {}
 
     void add_transition(State source_state, u64 transition_symbol, State destination_state) {
         auto& transitions_from_state = this->pending_transitions[source_state];
@@ -426,13 +426,13 @@ struct Affine_Program_Builder {
         if (this->initial_state < 0) throw std::runtime_error("Initial state is not set when attempting to build an affine program!");
     }
 
-    Affine_Program build(s64 state_cnt = -1) {
+    Affine_Program<Transition_Tag> build(s64 state_cnt = -1) {
         check_all_fields_filled_out();
 
         // Some states might not have transitions, so we have to be careful if making decisions around the number of states based solely on discovered transitions.
         state_cnt = state_cnt > 0 ? state_cnt : this->pending_transitions.rbegin()->first + 1;
 
-        Affine_Program::Transition_Fn transitions;
+        typename Affine_Program<Transition_Tag>::Transition_Fn transitions;
         transitions.resize(state_cnt);
 
         State next_state = 0;
@@ -457,14 +457,48 @@ struct Affine_Program_Builder {
     }
 };
 
-std::ostream& operator<<(std::ostream& os, const Affine_Program::Transition_Symbol_Info& info);
+struct Branch_Product_Sym {
+    Color color;
+    Internal_Symbol first_sym;
+    Subtree_Tag     first_tag;
+    Internal_Symbol second_sym;
+    Subtree_Tag     second_tag;
 
-void write_affine_program_into_dot(std::ostream& stream, const Affine_Program& program);
+    bool operator<(const Branch_Product_Sym& other) const {
+        INSERT_LEX_LT_CODE(this->color, other.color);
+        INSERT_LEX_LT_CODE(this->first_sym, other.first_sym);
+        INSERT_LEX_LT_CODE(this->first_tag, other.first_tag);
+        INSERT_LEX_LT_CODE(this->second_sym, other.second_sym);
+        return this->second_tag < other.second_tag;
+    }
+};
 
-SWTA build_difference_swta(const SWTA& first, const SWTA& second);
-Affine_Program build_first_affine_program(const SWTA& swta);
-Affine_Program build_second_affine_program(const Affine_Program& first_program, const NFA& frontier_automaton, const SWTA::Metadata& metadata);
+std::ostream& operator<<(std::ostream& stream, const Branch_Product_Sym& sym);
+
+
+std::ostream& operator<<(std::ostream& os, const Branch_Selector& info);
+
+template <typename T>
+void write_affine_program_into_dot(std::ostream& stream, const Affine_Program<T>& program);
+
+Affine_Program<Branch_Selector> build_affine_program(const SWTA& swta);
 
 bool are_two_swtas_color_equivalent(const SWTA& first, const SWTA& second);
+Affine_Program<Branch_Product_Sym>
+build_colored_product_of_affine_programs(const Affine_Program<Branch_Selector>& first_ap, const Affine_Program<Branch_Selector>& second_ap, const NFA& frontier);
 
-bool does_affine_program_reach_nonzero_final_states(const Affine_Program& program);
+
+struct Underlying_SWTA_Info {
+    std::vector<State> initial_states;
+    std::vector<State> final_states;
+    u64 state_cnt;
+
+    Underlying_SWTA_Info(const SWTA& swta) : initial_states(swta.initial_states), final_states(swta.states_with_leaf_transitions.into_vector()), state_cnt(swta.number_of_states()) {}
+};
+
+struct Underlying_SWTA_Info_Pair {
+    Underlying_SWTA_Info first_swta_info;
+    Underlying_SWTA_Info second_swta_info;
+};
+
+bool does_affine_program_reach_nonzero_final_states(const Affine_Program<Branch_Product_Sym>& program, const Underlying_SWTA_Info_Pair& swta_pair_info);

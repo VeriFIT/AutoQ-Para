@@ -13,6 +13,8 @@ enum class Predefined_SWTA_Names : u64 {
     BV_EXAMPLE_10STAR_PRE = 0,
     BV_EXAMPLE_10STAR_POST = 1,
     BV_EXAMPLE_10STAR_RESULT = 2,
+    TRIVIAL_BOT = 3,   // Used for tests
+    TRIVIAL_ONES = 4,  // Used for tests
 };
 
 struct Def_State;

@@ -2,9 +2,11 @@
 #include "arith.hpp"
 #include "bit_set.hpp"
 #include "nfa.hpp"
+#include "basics.hpp"
 
 #include <vector>
 #include <map>
+#include <set>
 
 std::ostream& operator<<(std::ostream& os, const Linear_Form& form) {
     os << "Linear_Form{ ";
@@ -562,15 +564,15 @@ void put_form_into_matrix(ACN_Matrix& matrix, State source_state, const Linear_F
     }
 }
 
-std::pair<Affine_Program::Symbol_Handles, Affine_Program::Symbol_Store>
+std::pair<Affine_Program<Branch_Selector>::Symbol_Handles, Affine_Program<Branch_Selector>::Symbol_Store>
 extract_transition_matrices_from_swta(const SWTA& swta) {
-    Affine_Program::Symbol_Store symbol_store;
-    std::map<Affine_Program::Transition_Symbol_Info, u64> symbol_handles;
+    Affine_Program<Branch_Selector>::Symbol_Store symbol_store;
+    std::map<Branch_Selector, u64> symbol_handles;
 
     for (Internal_Symbol internal_sym = 0; internal_sym < swta.number_of_internal_symbols(); internal_sym++) {
         for (Color color = 0; color < swta.number_of_colors(); color++) {
-            Affine_Program::Transition_Symbol_Info left_symbol  (internal_sym, color, Subtree_Tag::LEFT);
-            Affine_Program::Transition_Symbol_Info right_symbol (internal_sym, color, Subtree_Tag::RIGHT);
+            Branch_Selector left_symbol  (internal_sym, color, Subtree_Tag::LEFT);
+            Branch_Selector right_symbol (internal_sym, color, Subtree_Tag::RIGHT);
 
             ACN_Matrix left_matrix  (swta.number_of_states(), swta.number_of_states());
             ACN_Matrix right_matrix (swta.number_of_states(), swta.number_of_states());
@@ -596,17 +598,17 @@ extract_transition_matrices_from_swta(const SWTA& swta) {
 
 struct AP_Build_Context {
     const SWTA& swta;
-    Affine_Program_Builder builder;
+    Affine_Program_Builder<Branch_Selector> builder;
     std::map<Macrostate, u64> macrostate_handles;
     std::vector<Macrostate> worklist;
 
-    AP_Build_Context (const SWTA& swta, const Affine_Program::Symbol_Handles& handles, const Affine_Program::Symbol_Store& store) :
+    AP_Build_Context (const SWTA& swta, const Affine_Program<Branch_Selector>::Symbol_Handles& handles, const Affine_Program<Branch_Selector>::Symbol_Store& store) :
         swta(swta),
         builder(handles, store)
     {}
 };
 
-void compute_post_and_store_result_in_ap(const Macrostate& macrostate, const Linear_Form& form, Affine_Program::Transition_Symbol_Info& symbol_info, AP_Build_Context& context) {
+void compute_post_and_store_result_in_ap(const Macrostate& macrostate, const Linear_Form& form, Branch_Selector& symbol_info, AP_Build_Context& context) {
     Macrostate post (context.swta.number_of_states());
 
     for (const auto& component : form.components) {
@@ -627,7 +629,7 @@ void compute_post_and_store_result_in_ap(const Macrostate& macrostate, const Lin
     context.builder.add_transition(macrostate.handle, symbol_handle, post.handle);
 }
 
-void extend_affine_program_with_post(const Macrostate& macrostate, Affine_Program::Transition_Symbol_Info& symbol_info, AP_Build_Context& context) {
+void extend_affine_program_with_post(const Macrostate& macrostate, Branch_Selector& symbol_info, AP_Build_Context& context) {
     Macrostate right_post (context.swta.number_of_states());
 
     for (State state : macrostate.state_names) {
@@ -681,7 +683,7 @@ SWTA build_difference_swta(const SWTA& first, const SWTA& second) {
         }
 
         Linear_Form::Component first_init_component (Algebraic_Complex_Number::ONE(), first.initial_states[0]);
-        Linear_Form::Component second_init_component (-Algebraic_Complex_Number::ONE(), second.initial_states[0]);
+        Linear_Form::Component second_init_component (-Algebraic_Complex_Number::ONE(), second.initial_states[0] + offset);
 
         Linear_Form form ({first_init_component, second_init_component});
         resulting_transitions[new_initial_state][0][0] = SWTA::Transition(form, form);
@@ -701,7 +703,7 @@ SWTA build_difference_swta(const SWTA& first, const SWTA& second) {
     return SWTA(resulting_transitions, {new_initial_state}, new_final_states);
 }
 
-Affine_Program build_first_affine_program(const SWTA& swta) {
+Affine_Program<Branch_Selector> build_affine_program(const SWTA& swta) {
     auto [symbol_handles, symbol_store] = extract_transition_matrices_from_swta(swta);
     AP_Build_Context build_context (swta, std::move(symbol_handles), std::move(symbol_store));
 
@@ -719,9 +721,13 @@ Affine_Program build_first_affine_program(const SWTA& swta) {
         Macrostate macrostate = build_context.worklist.back();
         build_context.worklist.pop_back();
 
+        if (build_context.swta.states_with_leaf_transitions.is_superset(macrostate.state_set)) {
+            build_context.builder.mark_state_final(macrostate.handle);
+        }
+
         for (Internal_Symbol symbol = 0; symbol < swta.number_of_internal_symbols(); symbol++) {
             for (Color color = 0; color < swta.number_of_colors(); color++) {
-                Affine_Program::Transition_Symbol_Info symbol_info(symbol, color, Subtree_Tag::NONE);
+                Branch_Selector symbol_info(symbol, color, Subtree_Tag::NONE);
 
                 extend_affine_program_with_post(macrostate, symbol_info, build_context);
             }
@@ -731,7 +737,7 @@ Affine_Program build_first_affine_program(const SWTA& swta) {
     Affine_Program program = build_context.builder.build(build_context.macrostate_handles.size());
 
     do_on_debug({
-        program.debug_data = new Affine_Program::Debug_Data;
+        program.debug_data = new Affine_Program<Branch_Selector>::Debug_Data;
         for (auto& [macrostate, handle] : build_context.macrostate_handles) {
             program.debug_data->state_names.emplace(handle, macrostate.to_string());
         }
@@ -740,7 +746,8 @@ Affine_Program build_first_affine_program(const SWTA& swta) {
     return program;
 }
 
-void write_affine_program_into_dot(std::ostream& stream, const Affine_Program& program) {
+template <typename T>
+void write_affine_program_into_dot(std::ostream& stream, const Affine_Program<T>& program) {
     stream << "digraph Affine_Program {\n";
 
     stream << "  qInit [shape=none, label=\"\"]\n";
@@ -757,98 +764,22 @@ void write_affine_program_into_dot(std::ostream& stream, const Affine_Program& p
 
     for (State state = 0; state < program.number_of_states(); state++) {
         for (u64 symbol = 0; symbol < program.transition_fn[state].size(); symbol++) {
-            Affine_Program::Transition_Symbol symbol_desc = program.symbol_store.at(symbol);
+            typename Affine_Program<T>::Transition_Symbol symbol_desc = program.symbol_store.at(symbol);
             for (State destination : program.transition_fn[state][symbol]) {
                 stream << "  q" << state << " -> q" << destination << " [label=\"" << symbol_desc.info << "\"]\n";
             }
         }
     }
 
-    stream << "}";
+    stream << "}\n";
 }
 
-std::ostream& operator<<(std::ostream& os, const Affine_Program::Transition_Symbol_Info& info) {
+
+std::ostream& operator<<(std::ostream& os, const Branch_Selector& info) {
     const char* tag_name = info.tag == Subtree_Tag::LEFT ? "L" : "R";
     // os << "(symbol=" << info.symbol << ", color=" << info.color << ", " << tag_name << ")";
     os << info.symbol << "-" << info.color << "-" << tag_name;
     return os;
-}
-
-struct Second_Affine_Program_Build_Context {
-    Worklist_Construction_Context<State_Pair> worklist_constr_ctx;
-    const SWTA::Metadata&  metadata;
-    const Affine_Program&  affine_program;
-    const NFA&             frontier_nfa;
-    Affine_Program_Builder program_builder;
-
-    Second_Affine_Program_Build_Context(const SWTA::Metadata& metadata, const Affine_Program& program, const NFA& frontier) :
-        metadata(metadata), affine_program(program), frontier_nfa(frontier), program_builder(program.symbol_handles, program.symbol_store) {}
-
-};
-
-void compute_ap_frontier_post_along_symbol(Second_Affine_Program_Build_Context& context, const State_Pair* current_state, Affine_Program::Transition_Symbol_Info& symbol_info) {
-    u64 ap_symbol_handle = context.affine_program.symbol_handles.at(symbol_info);
-
-    State nfa_state = current_state->second, ap_state = current_state->first;
-
-    for (State nfa_post : context.frontier_nfa.transitions[nfa_state][symbol_info.color]) {
-        for (State ap_post : context.affine_program.transition_fn[ap_state][ap_symbol_handle]) {
-            State_Pair imm_post = {.first = ap_post, .second = nfa_post, .handle = context.worklist_constr_ctx.handles.size() };
-            auto post = context.worklist_constr_ctx.mark_discovery(imm_post);
-
-            context.program_builder.add_transition(current_state->handle, ap_symbol_handle, post->handle);
-        }
-    }
-}
-
-Affine_Program build_second_affine_program(const Affine_Program& first_program, const NFA& frontier_automaton, const SWTA::Metadata& metadata) {
-    Second_Affine_Program_Build_Context context(metadata, first_program, frontier_automaton);
-
-    {
-        State_Pair initial_pair {.first = first_program.initial_state, .second = frontier_automaton.initial_states[0], .handle = 0};
-        auto [insert_pos, was_inserted] = context.worklist_constr_ctx.handles.emplace(initial_pair, 0);
-        context.worklist_constr_ctx.worklist.push_back(&insert_pos->first);
-
-        context.program_builder.mark_state_initial(initial_pair.handle);
-    }
-
-    while (!context.worklist_constr_ctx.worklist.empty()) {
-        auto state_pair = context.worklist_constr_ctx.extract();
-
-        State ap_state = state_pair->first;
-        State nfa_state = state_pair->second;
-
-        if (context.frontier_nfa.final_states.get_bit_value(nfa_state)) {
-            context.program_builder.mark_state_final(state_pair->handle);
-        }
-
-
-        for (Color color = 0; color < metadata.number_of_colors; color++) {
-            for (Internal_Symbol sym = 0; sym < context.metadata.number_of_internal_symbols; sym++) {
-                Affine_Program::Transition_Symbol_Info left_symbol_info (sym, color, Subtree_Tag::LEFT);
-                compute_ap_frontier_post_along_symbol(context, state_pair, left_symbol_info);
-
-                Affine_Program::Transition_Symbol_Info right_symbol_info (sym, color, Subtree_Tag::RIGHT);
-                compute_ap_frontier_post_along_symbol(context, state_pair, right_symbol_info);
-            }
-        }
-    }
-
-    Affine_Program result = context.program_builder.build(context.worklist_constr_ctx.handles.size());
-
-    do_on_debug({
-        result.debug_data = new Affine_Program::Debug_Data;
-        for (auto& [state_pair, handle] : context.worklist_constr_ctx.handles) {
-
-            std::string ap_name = context.affine_program.debug_data->state_names.at(state_pair.first);
-            std::string nfa_name = context.frontier_nfa.debug_data->state_names.at(state_pair.second);
-            std::string pair_name = "<AP=" + ap_name + ", F=" + nfa_name + ">";
-
-            result.debug_data->state_names.emplace(handle, pair_name);
-        }
-    });
-
-    return result;
 }
 
 NFA build_color_language_abstraction(const SWTA& swta) {
@@ -865,29 +796,421 @@ bool are_two_swtas_color_equivalent(const SWTA& first, const SWTA& second) {
 
     if (!are_colored_languages_equivalent) return false;
 
-    {
-        State old_initial_state = first_swta_abstraction.initial_states[0];
-        State new_initial_state = first_swta_abstraction.number_of_states();
+    auto first_program  = build_affine_program(first);
+    auto second_program = build_affine_program(second);
 
-        first_swta_abstraction.initial_states.clear();
-        first_swta_abstraction.initial_states.push_back(new_initial_state);
+    auto product = build_colored_product_of_affine_programs(first_program, second_program, first_swta_abstraction);
 
-        std::vector<std::vector<State>> transitions_from_new_state {{old_initial_state}};
-        first_swta_abstraction.transitions.push_back(transitions_from_new_state);
-    }
+    Underlying_SWTA_Info first_swta_info (first);
+    Underlying_SWTA_Info second_swta_info (second);
+    Underlying_SWTA_Info_Pair swta_info_pair (first_swta_info, second_swta_info);
 
-    SWTA difference_swta = build_difference_swta(first, second);
-    SWTA::Metadata metadata = difference_swta.get_metadata();
-
-    Affine_Program first_program  = build_first_affine_program(difference_swta);
-    Affine_Program second_program = build_second_affine_program(first_program, first_swta_abstraction, metadata);
-
-    bool are_equivalent = !does_affine_program_reach_nonzero_final_states(second_program);
+    bool are_equivalent = !does_affine_program_reach_nonzero_final_states(product, swta_info_pair);
 
     return are_equivalent;
 }
 
-bool does_affine_program_reach_nonzero_final_states(const Affine_Program& program) {
-    throw std::runtime_error("Not implemented!");   // @Todo
+struct State_Delta_Info {
+    u32 new_vector_count = 0;  // How many new vectors did we discover for the state
+    s32 new_vector_start = 0;  // Where in the matrix is the first newly discovered vector
+};
+
+// For debugging
+struct Propagation_Info {
+    State source;
+    State target;
+    ACN_Matrix source_row;
+    ACN_Matrix propagated_row;
+    ACN_Matrix propagated_row_after_insert;
+    ACN_Matrix symbol_matrix;
+    Branch_Product_Sym symbol_info;
+};
+
+struct Affine_Program_Propagation_Context {
+    const Affine_Program<Branch_Product_Sym>& program;
+    std::vector<State_Delta_Info> state_deltas;
+    std::vector<State>            worklist;
+    std::vector<ACN_Matrix>       state_vector_spaces;
+    u64                           state_space_dimension; 
+    std::vector<Propagation_Info> propagation_log;
+    s64                           final_state_with_nonzero = -1;
+};
+
+struct Propagation_Stats {
+    u32 propagation_cnt = 0;
+};
+
+std::vector<Propagation_Info*> filter_propagations_for_those_that_affect_state(std::vector<Propagation_Info>& propagations, State state_of_interest) {
+    std::set<State> interesting_states;
+    interesting_states.insert(state_of_interest);
+
+    std::vector<Propagation_Info*> filtered_propagations;
+    
+    for (auto it = propagations.rbegin(); it != propagations.rend(); ++it) {
+        auto& prop_info = *it;
+
+        if (interesting_states.contains(prop_info.target)) {
+            interesting_states.insert(prop_info.source);
+            filtered_propagations.push_back(&prop_info);
+        }
+    }
+
+    return filtered_propagations;
+}
+
+void write_propagation_info(std::map<State, std::string> state_names, Propagation_Info& info) {
+    std::cout << "Propagated from "
+              << info.source << " aka " << state_names.at(info.source)
+              << " to " << info.target << " aka " << state_names.at(info.target)
+              <<" along " << info.symbol_info << "\n";
+    std::cout << "  row entering pipe : " << info.source_row << "\n";
+    std::cout << "  row exiting pipe(0):" << info.propagated_row << "\n";
+    std::cout << "  row exiting pipe(1):" << info.propagated_row_after_insert << "\n";
+    // std::cout << "  pipe matrix:" << propagation_ptr->symbol_matrix << "\n";
+}
+
+void dump_propagations(std::vector<Propagation_Info*> propagations, Affine_Program_Propagation_Context& context) {
+    std::map<State, std::string>& state_names = context.program.debug_data->state_names;
+    for (auto propagation_ptr : propagations) {
+        write_propagation_info(state_names, *propagation_ptr);
+    }
+}
+
+void dump_propagations(std::vector<Propagation_Info> propagations, Affine_Program_Propagation_Context& context) {
+    std::map<State, std::string>& state_names = context.program.debug_data->state_names;
+    for (auto propagation_ptr : propagations) {
+        write_propagation_info(state_names, propagation_ptr);
+    }
+}
+
+void propagate_vector_from_state_matrix_to_successors(Affine_Program_Propagation_Context& context, State_Delta_Info& old_state_info, State current_state, u64 symbol) {
+    auto& successors_along_symbol = context.program.transition_fn[current_state][symbol];
+
+    u64 last_row_idx_exc = old_state_info.new_vector_start + old_state_info.new_vector_count;
+
+    auto& current_state_matrix  = context.state_vector_spaces[current_state];
+
+    const auto& transition_matrix = context.program.symbol_store[symbol].matrix;
+
+    for (State successor : successors_along_symbol) {
+        auto& successor_delta = context.state_deltas[successor];
+        if (successor_delta.new_vector_start >= context.state_space_dimension) {
+            continue;  // The matrix for the successor is already saturated 
+        }
+
+        for (u64 row_idx = old_state_info.new_vector_start; row_idx < last_row_idx_exc; row_idx++) {
+            auto& target_matrix = context.state_vector_spaces[successor];
+
+            auto row = current_state_matrix.extract_row(row_idx); // @Optimize: maybe we do not need to do a copy here since we already will be allocating during matrix multiply
+            auto propagated_row = row * transition_matrix;
+
+            if (true) {
+                Propagation_Info propagation_info = {
+                    .source = current_state,
+                    .target = successor,
+                    .source_row = row,
+                    .propagated_row = row * transition_matrix,
+                    .propagated_row_after_insert = propagated_row,
+                    .symbol_matrix = transition_matrix,
+                    .symbol_info = context.program.symbol_store[symbol].info
+                };
+                write_propagation_info(context.program.debug_data->state_names, propagation_info);
+                context.propagation_log.push_back(propagation_info);
+            };
+
+            if (propagated_row.contains_only_zeros()) continue;
+
+            s64 new_row_position = add_row_to_row_echelon_matrix_no_copy(target_matrix, propagated_row);
+
+            if (new_row_position < 0) {
+                continue;
+            }
+
+            if (new_row_position == context.state_space_dimension) {
+                successor_delta.new_vector_start = context.program.number_of_states();
+                break;  // The matrix became satured, no need to try propagate anything
+            }
+
+            if (successor_delta.new_vector_count == 0) {
+                context.worklist.push_back(successor);
+            }
+
+            successor_delta.new_vector_count += 1;
+        }
+    }
+}
+
+bool does_state_vector_space_contain_nonzeros(Affine_Program_Propagation_Context& context, const ACN_Matrix& final_vector, State state) {
+    auto& current_state_matrix  = context.state_vector_spaces[state];
+    auto pontential_leaf_values = current_state_matrix * final_vector; // [n x 1] vector
+
+    if (!pontential_leaf_values.contains_only_zeros()) { // A final state is reachable with non-zero value
+        context.final_state_with_nonzero = state;
+        return true;
+    };
+
     return false;
+}
+
+bool does_affine_program_reach_nonzero_final_states(const Affine_Program<Branch_Product_Sym>& program, const Underlying_SWTA_Info_Pair& swta_pair_info) {
+    u64 swta_state_cnt = swta_pair_info.first_swta_info.state_cnt + swta_pair_info.second_swta_info.state_cnt;
+
+    ACN_Matrix final_vector (swta_state_cnt, 1);
+    for (State final_state : swta_pair_info.first_swta_info.final_states) {
+        Algebraic_Complex_Number acn_one = Algebraic_Complex_Number::ONE();
+        final_vector.set(final_state, 0, acn_one);
+    }
+    for (State final_state : swta_pair_info.second_swta_info.final_states) {
+        Algebraic_Complex_Number acn_one = Algebraic_Complex_Number::ONE();
+        final_vector.set(final_state + swta_pair_info.first_swta_info.state_cnt, 0, acn_one);
+    }
+    
+    Propagation_Stats stats;
+    Affine_Program_Propagation_Context context(program);
+    {  // Initialize the context
+        context.state_space_dimension = swta_state_cnt;
+        context.state_vector_spaces.reserve(program.number_of_states());
+
+        for (State state = 0; state < program.number_of_states(); state++) {
+            context.state_vector_spaces.push_back(ACN_Matrix(context.state_space_dimension, context.state_space_dimension));
+        }
+        context.state_deltas.resize(program.number_of_states());
+    }
+
+    { // Push the initial state with the initial vector into the worklist
+        context.worklist.push_back(program.initial_state);
+        context.state_deltas[program.initial_state].new_vector_count = 1;
+
+        auto& initial_state_matrix = context.state_vector_spaces[program.initial_state];
+        Algebraic_Complex_Number init_vector_value = Algebraic_Complex_Number::ONE();
+        initial_state_matrix.set(0, swta_pair_info.first_swta_info.initial_states[0], init_vector_value);
+        initial_state_matrix.set(0, swta_pair_info.second_swta_info.initial_states[0], -init_vector_value);
+    }
+
+    while (!context.worklist.empty()) {
+        stats.propagation_cnt += 1;
+        do_on_debug({
+            std::cout << "Processing to " <<  context.worklist.back() << " state matrix:\n " <<  context.state_vector_spaces[context.worklist.back()] << "\n";
+        });
+        
+        State current_state = context.worklist.back();
+        State_Delta_Info old_delta_info = context.state_deltas[current_state];
+        context.worklist.pop_back();
+
+        // Mark in state deltas that we have already processe the new vectors
+        context.state_deltas[current_state].new_vector_start += old_delta_info.new_vector_count;
+        context.state_deltas[current_state].new_vector_count = 0;
+
+        if (program.final_states.get_bit_value(current_state)) {
+            bool contains_nonzeros = does_state_vector_space_contain_nonzeros(context, final_vector, current_state);
+            if (contains_nonzeros) {
+                goto terminate;
+            }
+        }
+
+        for (u64 symbol = 0; symbol < program.number_of_symbols(); symbol++) {
+            propagate_vector_from_state_matrix_to_successors(context, old_delta_info, current_state, symbol);
+        }
+    }
+    
+    for (State state = 0; state < program.number_of_states(); state++) {
+        if (program.final_states.get_bit_value(state)) {
+            bool contains_nonzeros = does_state_vector_space_contain_nonzeros(context, final_vector, state);
+            if (contains_nonzeros) {
+                goto terminate;
+            }
+        }
+    }
+
+    terminate:
+        bool reaches_nonzero = context.final_state_with_nonzero >= 0;
+
+        do_on_debug({std::cout << "Performed " << context.propagation_log.size() << " propagations.\n"; });
+
+        dump_propagations(context.propagation_log, context);
+        if (reaches_nonzero) {
+            auto filtered_propagations = filter_propagations_for_those_that_affect_state(context.propagation_log, context.final_state_with_nonzero);
+            dump_propagations(filtered_propagations, context);
+        }
+
+        return reaches_nonzero;
+}
+
+struct Colored_Product_State {
+    State in_first;
+    State in_second;
+    State in_frontier;
+
+    s64 handle = -1;
+
+    bool operator<(const Colored_Product_State& other) const {
+        if (this->in_first < other.in_first) return true;
+        if (this->in_first > other.in_first) return false;
+
+        if (this->in_second < other.in_second) return true;
+        if (this->in_second > other.in_second) return false;
+
+        return this->in_frontier < other.in_frontier;
+    }
+};
+
+ACN_Matrix compose_transition_matrices(const ACN_Matrix& first_matrix, const ACN_Matrix& second_matrix) {
+    u64 width  = first_matrix.width + second_matrix.width;
+    u64 height = first_matrix.height + second_matrix.height;
+    ACN_Matrix result(height, width);
+
+    for (u64 first_matrix_row_idx = 0; first_matrix_row_idx < first_matrix.height; first_matrix_row_idx++) {
+        for (u64 first_matrix_col_idx = 0; first_matrix_col_idx < first_matrix.width; first_matrix_col_idx++) {
+            auto& elem = first_matrix.at(first_matrix_row_idx, first_matrix_col_idx);
+            result.set(first_matrix_row_idx, first_matrix_col_idx, elem);
+        }
+    }
+
+    for (u64 second_matrix_row_idx = 0; second_matrix_row_idx < second_matrix.height; second_matrix_row_idx++) {
+        for (u64 second_matrix_col_idx = 0; second_matrix_col_idx < second_matrix.width; second_matrix_col_idx++) {
+            auto& elem = second_matrix.at(second_matrix_row_idx, second_matrix_col_idx);
+            result.set(second_matrix_row_idx + first_matrix.height, second_matrix_col_idx + second_matrix.width, elem);
+        }
+    }
+
+    return result;
+}
+
+std::vector<std::vector<const Affine_Program<Branch_Selector>::Transition_Symbol*>>
+group_transition_symbols_by_color(const Affine_Program<Branch_Selector>::Symbol_Store& symbol_store, u64 color_cnt) {
+    std::vector<std::vector<const Affine_Program<Branch_Selector>::Transition_Symbol*>> result;
+    result.resize(color_cnt);
+
+    for (auto& symbol : symbol_store) {
+        result[symbol.info.color].push_back(&symbol);
+    }
+
+    return result;
+}
+
+struct Product_Alphabet_Prep {
+    std::vector<std::vector<const Affine_Program<Branch_Selector>::Transition_Symbol*>> first_transition_syms_by_color;
+    std::vector<std::vector<const Affine_Program<Branch_Selector>::Transition_Symbol*>> second_transition_syms_by_color;
+    Affine_Program<Branch_Product_Sym>::Symbol_Handles symbol_handles;
+    Affine_Program<Branch_Product_Sym>::Symbol_Store   symbol_store;
+};
+
+Product_Alphabet_Prep prepare_transition_symbols_for_product_automaton(const Affine_Program<Branch_Selector>& first_ap, const Affine_Program<Branch_Selector>& second_ap, u64 color_cnt) {
+    auto selectors_in_first_by_color  = group_transition_symbols_by_color(first_ap.symbol_store, color_cnt);
+    auto selectors_in_second_by_color = group_transition_symbols_by_color(second_ap.symbol_store, color_cnt);
+
+    Affine_Program<Branch_Product_Sym>::Symbol_Handles handles;
+    Affine_Program<Branch_Product_Sym>::Symbol_Store   store;
+
+    for (Color color = 0; color < color_cnt; color++) {
+        for (auto& first_ap_symbol : selectors_in_first_by_color[color]) {
+            for (auto& second_ap_symbol : selectors_in_second_by_color[color]) {
+                Branch_Product_Sym sym = {
+                    .color = color,
+                    .first_sym = first_ap_symbol->info.symbol, .first_tag = first_ap_symbol->info.tag,
+                    .second_sym = second_ap_symbol->info.symbol, .second_tag = second_ap_symbol->info.tag
+                };
+
+                handles.emplace(sym, handles.size());
+
+                ACN_Matrix matrix = compose_transition_matrices(first_ap_symbol->matrix, second_ap_symbol->matrix);
+                Affine_Program<Branch_Product_Sym>::Transition_Symbol symbol_to_store = {.info = sym, .matrix = matrix};
+                store.push_back(symbol_to_store);
+            }
+        }
+    }
+
+    Product_Alphabet_Prep result(selectors_in_first_by_color, selectors_in_second_by_color, handles, store);
+    return result;
+}
+
+
+struct Colored_Product_Build_Context {
+    Worklist_Construction_Context<Colored_Product_State> worklist_info;
+    const Affine_Program<Branch_Selector>& first_ap;
+    const Affine_Program<Branch_Selector>& second_ap;
+    const NFA& frontier;
+    Affine_Program_Builder<Branch_Product_Sym> builder;
+
+    Colored_Product_Build_Context(
+        const Affine_Program<Branch_Selector>& first_ap,
+        const Affine_Program<Branch_Selector>& second_ap,
+        const NFA& frontier,
+        const Affine_Program<Branch_Product_Sym>::Symbol_Handles& handles,
+        const Affine_Program<Branch_Product_Sym>::Symbol_Store& store) :
+        first_ap(first_ap),
+        second_ap(second_ap),
+        frontier(frontier),
+        builder(handles, store) {}
+};
+
+void product_build_step_along_color(Colored_Product_Build_Context& context, Product_Alphabet_Prep& alphabet_prep, const Colored_Product_State* current_state, Color color, State frontier_nfa_state) {
+    for (auto first_branch_selector_ptr : alphabet_prep.first_transition_syms_by_color[color]) {
+        for (auto second_branch_selector_ptr : alphabet_prep.second_transition_syms_by_color[color]) {
+            Branch_Product_Sym product_symbol = {
+                .color = color,
+                .first_sym = first_branch_selector_ptr->info.symbol, .first_tag = first_branch_selector_ptr->info.tag,
+                .second_sym = second_branch_selector_ptr->info.symbol, .second_tag = second_branch_selector_ptr->info.tag
+            };
+            u64 product_symbol_handle = context.builder.symbol_handles.at(product_symbol);
+
+            u64 first_branch_selector_handle  = context.first_ap.symbol_handles.at(first_branch_selector_ptr->info);
+            u64 second_branch_selector_handle = context.second_ap.symbol_handles.at(second_branch_selector_ptr->info);
+
+            auto& first_ap_successors  = context.first_ap.transition_fn[current_state->handle][first_branch_selector_handle];
+            auto& second_ap_successors = context.second_ap.transition_fn[current_state->handle][second_branch_selector_handle];
+
+            for (auto first_successor : first_ap_successors) {
+                for (auto second_successor : second_ap_successors) {
+                    Colored_Product_State imm_product_state = {.in_first = first_successor, .in_second = second_successor, .in_frontier = frontier_nfa_state};
+                    auto dest_state = context.worklist_info.mark_discovery(imm_product_state);
+
+                    context.builder.add_transition(current_state->handle, product_symbol_handle, dest_state->handle);
+                }
+            }
+        }
+    }
+}
+
+Affine_Program<Branch_Product_Sym>
+build_colored_product_of_affine_programs(const Affine_Program<Branch_Selector>& first_ap, const Affine_Program<Branch_Selector>& second_ap, const NFA& frontier) {
+    u64 color_cnt = frontier.alphabet_size();
+    auto alphabet_prep = prepare_transition_symbols_for_product_automaton(first_ap, second_ap, color_cnt);
+
+    Colored_Product_Build_Context context (first_ap, second_ap, frontier, alphabet_prep.symbol_handles, alphabet_prep.symbol_store);
+    {
+        Colored_Product_State imm_initial_state {.in_first = first_ap.initial_state, .in_second = second_ap.initial_state, .in_frontier = frontier.initial_states[0]};
+        auto initial_state = context.worklist_info.mark_discovery(imm_initial_state);        
+        context.builder.mark_state_initial(initial_state->handle);
+    }
+
+    while (!context.worklist_info.worklist.empty()) {
+        auto current_state = context.worklist_info.extract();
+
+        bool first_accepts    = context.first_ap.final_states.get_bit_value(current_state->in_first);
+        bool second_accepts   = context.second_ap.final_states.get_bit_value(current_state->in_second);
+        bool frontier_accepts = context.frontier.final_states.get_bit_value(current_state->in_frontier);
+
+        if (first_accepts && second_accepts && frontier_accepts) {
+            context.builder.mark_state_final(current_state->handle);
+        };
+
+        for (Color color = 0; color < color_cnt; color++) {
+            State nfa_post_state = context.frontier.transitions[current_state->in_frontier][color].at(0);
+            product_build_step_along_color(context, alphabet_prep, current_state, color, nfa_post_state);
+        }
+    }
+
+    auto result = context.builder.build();
+    return result;
+}
+
+
+std::ostream& operator<<(std::ostream& stream, const Branch_Product_Sym& sym) {
+    const char* first_sym_str  = sym.first_tag == Subtree_Tag::LEFT ? "L" : "R";
+    const char* second_sym_str = sym.second_tag == Subtree_Tag::LEFT ? "L" : "R";
+
+    stream << "<c=" << sym.color << "-" << sym.first_sym << first_sym_str << "-" << sym.second_sym << second_sym_str << ">";
+
+    return stream;    
 }

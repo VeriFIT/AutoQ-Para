@@ -1,6 +1,8 @@
 #include "nfa.hpp"
+#include "basics.hpp"
 
 #include <map>
+#include <sstream>
 
 
 std::ostream& operator<<(std::ostream& os, const Macrostate& macrostate) {
@@ -113,7 +115,35 @@ NFA NFA::determinize() const {
         ordered_resulting_transitions[state] = transitions_from_state;
     }
 
-    return NFA({0}, final_macrostates, ordered_resulting_transitions);
+    NFA result ({0}, final_macrostates, ordered_resulting_transitions);
+
+    do_on_debug({
+        result.debug_data = new NFA::Debug_Data;
+
+        for (auto& [macrostate, handle] : handles) {
+            std::stringstream string_stream;
+            string_stream << "{";
+
+            u64 written_states_cnt = 0;
+            for (State state : macrostate.state_names) {
+                std::string state_name = (this->debug_data->state_names.contains(state)) ?  this->debug_data->state_names.at(state) : std::to_string(state);
+                string_stream << state_name;
+
+                if (written_states_cnt + 1 != macrostate.state_names.size()) {
+                    string_stream << ", ";
+                }
+
+                written_states_cnt += 1;
+            }
+
+            string_stream << "}";
+
+            std::string macrostate_name = string_stream.str();
+            result.debug_data->state_names[handle] = macrostate_name;
+        }
+    });
+
+    return result;
 }
 
 bool NFA::is_every_state_accepting() const {

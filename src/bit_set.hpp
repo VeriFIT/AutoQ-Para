@@ -123,6 +123,14 @@ struct Bit_Set {
         return false; // All buckets have equal value
     }
 
+    bool empty() const {
+        u64 reduction_result = 0;
+        for (u64 bucket_idx = 0; bucket_idx < this->get_bucket_count(); bucket_idx++) {
+            reduction_result |= this->data[bucket_idx];
+        }
+        return reduction_result;
+    };
+
     bool is_intersection_empty(const Bit_Set& other) const {
         u64 min_size = std::min(this->size, other.size);
 

@@ -10,8 +10,14 @@
 
 #include "gmp.h"
 
+typedef int8_t   s8;
+typedef int64_t  s16;
+typedef int64_t  s32;
 typedef int64_t  s64;
+
 typedef uint8_t  u8;
+typedef uint64_t u16;
+typedef uint64_t u32;
 typedef uint64_t u64;
 
 struct Complex_Number {
@@ -436,6 +442,16 @@ struct ACN_Matrix {
         return this->width;
     }
 
+    ACN_Matrix extract_row(u64 row_idx) const {
+        ACN_Matrix row (1, this->width);
+        for (u64 column_idx = 0; column_idx < this->width; column_idx++) {
+            auto& elem_value = this->at(row_idx, column_idx);
+            row.set(0, column_idx, elem_value);
+        }
+        return row;
+    }
+    
+
     void insert_row_at(const ACN_Matrix& row, u64 row_idx, bool skip_shifting_subsequent_rows = false) {
         assert(row.width == this->width);
 
@@ -452,11 +468,18 @@ struct ACN_Matrix {
             this->data[row_idx*this->width + elem_idx] = row.at(0, elem_idx);
         }
     }
-
-    void subtract_from_ith_row(u64 row_idx, Algebraic_Complex_Number& row_coef, ACN_Matrix& rows_to_subtract, u64 row_to_subtract_idx, Algebraic_Complex_Number& row_to_subtract_coef) const {
+    /**
+     * @Note: We are copying the row_to_subtract_coef in the function invocation, becasue if we were storing just a reference to some external
+     * number (e.g. matrix cell) then the subtraction we are doing might in fact modify the coefficient during the subtraction for-loop.
+     */
+    void subtract_from_ith_row(u64 row_idx, Algebraic_Complex_Number& row_coef, ACN_Matrix& rows_to_subtract, u64 row_to_subtract_idx, Algebraic_Complex_Number row_to_subtract_coef) const {
         for (u64 elem_idx = 0; elem_idx < this->width; elem_idx++) {
             auto subtractee_weighted = this->at(row_idx, elem_idx) * row_coef;
             auto subtractor_weighted = rows_to_subtract.at(row_to_subtract_idx, elem_idx) * row_to_subtract_coef;
+
+            // std::cout << "Subtractee: " << this->at(row_idx, elem_idx) << "*" << row_coef << " = " << subtractee_weighted << "\n";
+            // std::cout << "Subtractor: " << rows_to_subtract.at(row_to_subtract_idx, elem_idx) << "*" << row_to_subtract_coef << " = " << subtractor_weighted << "\n";
+            
             auto result_elem = subtractee_weighted - subtractor_weighted;
 
             this->data[row_idx*this->width + elem_idx] = result_elem;
@@ -487,7 +510,17 @@ struct ACN_Matrix {
 
 std::ostream& operator<<(std::ostream& os, const ACN_Matrix& matrix);
 
-s64 add_row_to_row_echelon_matrix(ACN_Matrix& matrix, ACN_Matrix& row);
+/**
+ *  Add a given row into the matrix in row-echelon reduced form.
+ */
+s64 add_row_to_row_echelon_matrix(ACN_Matrix& matrix, const ACN_Matrix& row);
+
+/**
+ *  Add a given row into the matrix in row-echelon reduced form. The row is modified in process
+ *  into the vector that is eventually inserted into the matrix.
+ */
+s64 add_row_to_row_echelon_matrix_no_copy(ACN_Matrix& matrix, ACN_Matrix& row);
+
 ACN_Matrix square_acn_matrix_from_ints(const std::vector<s64>& ints);
 ACN_Matrix row_from_ints(const std::vector<s64>& row_data);
 ACN_Matrix column_from_ints(const std::vector<s64>& column_data);

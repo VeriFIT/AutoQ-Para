@@ -141,6 +141,7 @@ WTT get_predefined_wtt(Predefined_WTT_Names name) {
 
 SWTA get_predefined_swta(Predefined_SWTA_Names name) {
     using DLF = std::vector<Def_Linear_Form>;
+    using ACN = Algebraic_Complex_Number;
 
     if (name == Predefined_SWTA_Names::BV_EXAMPLE_10STAR_PRE) {
         SWTA::Metadata metadata {.number_of_internal_symbols = 2, .number_of_colors = 1};
@@ -254,7 +255,6 @@ SWTA get_predefined_swta(Predefined_SWTA_Names name) {
 
         Color c = 0;
 
-        using ACN = Algebraic_Complex_Number;
         ACN one_half (1, 0, 0, 0, 2);
 
         { // gamma ----> w(1/2 delta + 1/2 epsilon, 1/2 delta - 1/2 epsilon)
@@ -322,6 +322,52 @@ SWTA get_predefined_swta(Predefined_SWTA_Names name) {
 
         return result;
     }
+
+    if (name == Predefined_SWTA_Names::TRIVIAL_BOT) {
+        State q_bot   = 0;
+
+        Internal_Symbol sym_w = 0;
+
+        SWTA::Metadata metadata = { .number_of_internal_symbols = 1, .number_of_colors = 1 };
+        SWTA::Transition_Builder builder (metadata);
+
+        Color c = 0;
+
+        builder.add_bot_state_transitions(q_bot);
+
+        std::vector<State> initial_states ({q_bot});
+        Bit_Set leaf_states (1, {q_bot});
+        auto transition_fn = builder.build(1);
+        SWTA result (transition_fn, initial_states, leaf_states);
+
+        return result;
+    }
+
+    if (name == Predefined_SWTA_Names::TRIVIAL_ONES) {
+        State q_one   = 0;
+
+        Internal_Symbol sym_w = 0;
+
+        SWTA::Metadata metadata = { .number_of_internal_symbols = 1, .number_of_colors = 1 };
+        SWTA::Transition_Builder builder (metadata);
+
+        Color c = 0;
+
+        { // q_one ----> w(q_one, q_one)
+             DLF left_subtree  {Def_Coef(ACN::ONE()) * q_one};
+             DLF right_subtree {Def_Coef(ACN::ONE()) * q_one};
+             auto transition = synthetize_swta_transition(left_subtree, right_subtree);
+             builder.add_transition(q_one, sym_w, c, transition);
+        }
+
+        std::vector<State> initial_states ({q_one});
+        Bit_Set leaf_states (1, {q_one});
+        auto transition_fn = builder.build(1);
+        SWTA result (transition_fn, initial_states, leaf_states);
+
+        return result;
+    }
+
 
     throw std::runtime_error("No definition for the predefined SWTA: " + std::to_string(static_cast<u64>(name)));
 }
