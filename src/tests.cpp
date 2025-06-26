@@ -20,6 +20,7 @@ TEST_CASE( "Simple multiplication", "[Algebraic complex numbers]" ) {
     REQUIRE(fp_result.k == 0);
 }
 
+
 TEST_CASE( "Multiplication comutativity", "[Algebraic complex numbers]" ) {
     Algebraic_Complex_Number left  (1, 2, 3, 4, 0);
     Algebraic_Complex_Number right (0, 1, 2, 3, 1);
@@ -421,14 +422,15 @@ TEST_CASE("Build first affine program", "[Affine programs]") {
 
     SWTA::Metadata metadata = swta.get_metadata();
 
-    auto frontier_automaton = build_frontier_automaton(swta);
-    auto first_program      = build_affine_program(swta);
+    auto frontier_automaton    = build_frontier_automaton(swta);
+    auto color_sym_abstraction = build_color_internal_symbol_abstraction(swta);
+    auto first_program         = build_affine_program(swta, color_sym_abstraction);
 }
 
 TEST_CASE("Are two SWTAs color equivalent", "[Affine programs]") {
-    auto bv_example_post   = get_predefined_swta(Predefined_SWTA_Names::BV_EXAMPLE_10STAR_POST);
-    auto bv_example_result = get_predefined_swta(Predefined_SWTA_Names::BV_EXAMPLE_10STAR_POST);
-    
+    auto bv_example_post   = get_predefined_swta(Predefined_SWTA_Names::TRIVIAL_BOT);
+    auto bv_example_result = get_predefined_swta(Predefined_SWTA_Names::TRIVIAL_ONES);
+
     bool are_equivalent = are_two_swtas_color_equivalent(bv_example_post, bv_example_result);
     std::cout << "Are equivalent?: " << are_equivalent << "\n";
 }

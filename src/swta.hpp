@@ -481,8 +481,6 @@ std::ostream& operator<<(std::ostream& os, const Branch_Selector& info);
 template <typename T>
 void write_affine_program_into_dot(std::ostream& stream, const Affine_Program<T>& program);
 
-Affine_Program<Branch_Selector> build_affine_program(const SWTA& swta);
-
 bool are_two_swtas_color_equivalent(const SWTA& first, const SWTA& second);
 Affine_Program<Branch_Product_Sym>
 build_colored_product_of_affine_programs(const Affine_Program<Branch_Selector>& first_ap, const Affine_Program<Branch_Selector>& second_ap, const NFA& frontier);
@@ -502,3 +500,22 @@ struct Underlying_SWTA_Info_Pair {
 };
 
 bool does_affine_program_reach_nonzero_final_states(const Affine_Program<Branch_Product_Sym>& program, const Underlying_SWTA_Info_Pair& swta_pair_info);
+
+struct Color_Symbol {
+    Color color;
+    Internal_Symbol symbol;
+
+    bool operator<(const Color_Symbol& other) const {
+        INSERT_LEX_LT_CODE(color, other.color);
+        return symbol < other.symbol;
+    }
+};
+
+struct Color_Symbol_Abstraction {
+    NFA abstraction;
+    std::map<Color_Symbol, u64> symbol_handles;
+};
+
+Affine_Program<Branch_Selector> build_affine_program(const SWTA& swta, const Color_Symbol_Abstraction& color_sym_abstraction);
+
+Color_Symbol_Abstraction build_color_internal_symbol_abstraction(const SWTA& swta);

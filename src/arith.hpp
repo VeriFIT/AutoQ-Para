@@ -47,8 +47,7 @@ struct Algebraic_Complex_Number {
     mpz_t a, b, c, d, k;
 
     Algebraic_Complex_Number() {
-        mpz_inits(a, b, c, d, 0);
-        mpz_init_set_si(k, 0);
+        mpz_inits(a, b, c, d, k, 0);
     }
 
     Algebraic_Complex_Number(s64 a, s64 b, s64 c, s64 d, s64 k = 1) {
@@ -159,6 +158,10 @@ struct Algebraic_Complex_Number {
 
         mpz_clear(immediate);
 
+        if (result.is_zero()) {
+            mpz_set_si(result.k, 0);
+        }
+
         return result;
     }
 
@@ -232,6 +235,10 @@ struct Algebraic_Complex_Number {
         mpz_add(result.c, smaller->c, larger_rescaled.c);
         mpz_add(result.d, smaller->d, larger_rescaled.d);
         mpz_set(result.k, smaller->k);
+
+        if (result.is_zero()) {
+            mpz_set_si(result.k, 0);
+        }
 
         return result;
     }
@@ -450,7 +457,7 @@ struct ACN_Matrix {
         }
         return row;
     }
-    
+
 
     void insert_row_at(const ACN_Matrix& row, u64 row_idx, bool skip_shifting_subsequent_rows = false) {
         assert(row.width == this->width);
@@ -479,7 +486,7 @@ struct ACN_Matrix {
 
             // std::cout << "Subtractee: " << this->at(row_idx, elem_idx) << "*" << row_coef << " = " << subtractee_weighted << "\n";
             // std::cout << "Subtractor: " << rows_to_subtract.at(row_to_subtract_idx, elem_idx) << "*" << row_to_subtract_coef << " = " << subtractor_weighted << "\n";
-            
+
             auto result_elem = subtractee_weighted - subtractor_weighted;
 
             this->data[row_idx*this->width + elem_idx] = result_elem;

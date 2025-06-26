@@ -160,6 +160,10 @@ struct Worklist_Construction_Context {
 
         return result_ptr;
     }
+
+    bool has_more_to_explore() const {
+        return !this->worklist.empty();
+    }
 };
 
 struct State_Pair {
