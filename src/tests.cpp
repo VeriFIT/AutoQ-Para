@@ -496,5 +496,62 @@ TEST_CASE("Run SWTA Program") {
     SWTA result         = run_swta_program(program);
 
     bool is_our_bv_correct = are_two_swtas_color_equivalent(result, post_condition);
-    std::cout << "Is our BV correct? " << is_our_bv_correct << "\n";
+    REQUIRE(is_our_bv_correct);
+}
+
+TEST_CASE("CnZ vs CCX-impl") {
+    SWTA::Metadata swta_metadata = {
+        .number_of_internal_symbols = 3, // Work qubit and ancilla
+        .number_of_colors = 1
+    };
+
+    SWTA all_basis = get_predefined_swta(Predefined_SWTA_Names::GROVER_ALL_BASIS);
+
+    std::vector<WTT> needed_transducers {
+        /* 0 */ get_predefined_wtt(Predefined_WTT_Names::GROVER_X, swta_metadata),
+        /* 1 */ get_predefined_wtt(Predefined_WTT_Names::GROVER_H, swta_metadata),
+        /* 2 */ get_predefined_wtt(Predefined_WTT_Names::GROVER_FIRST_MULTI_Z, swta_metadata),
+        /* 3 */ get_predefined_wtt(Predefined_WTT_Names::GROVER_FIRST_MULTI_Z_USING_CCX, swta_metadata),
+        /* 4 */ get_predefined_wtt(Predefined_WTT_Names::GROVER_SECOND_MULTI_Z, swta_metadata),
+        /* 5 */ get_predefined_wtt(Predefined_WTT_Names::GROVER_SECOND_MULTI_Z_USING_CCX, swta_metadata),
+    };
+
+    SWTA_Program first_program = {
+        .initial_swta = all_basis,
+        .transducers = needed_transducers,
+        .applications = {
+            Transducer_Application(0), // X
+            Transducer_Application(2), // CnZ to last ancilla
+            Transducer_Application(0), // X
+            Transducer_Application(1), // H
+            Transducer_Application(0), // X
+            Transducer_Application(4), // CnZ to last working qubit
+            Transducer_Application(0), // X
+            Transducer_Application(1), // H
+        }
+    };
+
+    SWTA_Program program_for_hw = {
+        .initial_swta = all_basis,
+        .transducers = needed_transducers,
+        .applications = {
+            Transducer_Application(0), // X
+            Transducer_Application(3), // CnZ to last ancilla
+            Transducer_Application(0), // X
+            Transducer_Application(1), // H
+            Transducer_Application(0), // X
+            Transducer_Application(5), // CnZ to last working qubit
+            Transducer_Application(0), // X
+            Transducer_Application(1), // H
+        }
+    };
+
+    SWTA result_idealistic = run_swta_program(first_program);
+    SWTA result_for_hw     = run_swta_program(program_for_hw);
+
+    bool is_our_impl_correct = are_two_swtas_color_equivalent(
+        result_idealistic,
+        result_for_hw
+    );
+    REQUIRE(is_our_impl_correct);
 }

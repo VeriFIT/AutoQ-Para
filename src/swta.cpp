@@ -729,6 +729,7 @@ std::ostream& operator<<(std::ostream& os, const Branch_Selector& info) {
 
 NFA build_color_language_abstraction(const SWTA& swta) {
     auto abstraction_nfa = build_frontier_automaton(swta);
+    // abstraction_nfa.write_dot(std::cout);
     auto abstraction_dfa = abstraction_nfa.determinize();
     abstraction_dfa.complete();
     return std::move(abstraction_dfa);
@@ -744,7 +745,7 @@ bool are_two_swtas_color_equivalent(const SWTA& first, const SWTA& second) {
         do_on_debug({
             std::cout << "Provided SWTAs do not have equal colored languages:" << "\n";
             first_swta_abstraction.write_dot(std::cout);
-            std::cout << "------------------------" << "\n";
+            std::cout << "\n------------------------" << "\n";
             second_swta_abstraction.write_dot(std::cout);
         });
         return false;

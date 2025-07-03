@@ -232,6 +232,31 @@ struct WTT {
         Transition() {}
         Transition(Linear_Form ll, Linear_Form lr, Linear_Form rl, Linear_Form rr) : ll(ll), lr(lr), rl(rl), rr(rr) {}
 
+        Transition(Transition&& other) {
+            ll = std::move(other.ll);
+            lr = std::move(other.lr);
+            rl = std::move(other.rl);
+            rr = std::move(other.rr);
+        }
+
+        Transition(const Transition& other) : ll(other.ll), lr(other.lr), rl(other.rl), rr(other.rr) {}
+
+        Transition& operator=(Transition&& other) {
+            this->ll = other.ll;
+            this->lr = other.lr;
+            this->rl = other.rl;
+            this->rr = other.rr;
+            return *this;
+        }
+
+        Transition& operator=(const Transition& other) {
+            this->ll = other.ll;
+            this->lr = other.lr;
+            this->rl = other.rl;
+            this->rr = other.rr;
+            return *this;
+        }
+
         bool is_present() const {
             bool is_left_present  = !ll.empty() || !lr.empty();
             bool is_right_present = !rl.empty() || !rr.empty();
@@ -270,6 +295,8 @@ struct WTT {
         this->states_with_leaf_transitions = state_set;
     };
 
+    WTT(const Transitions& transitions, Bit_Set& leaf_states, const std::vector<State>& initial_states) : transitions(transitions), states_with_leaf_transitions(leaf_states), initial_states(initial_states) {};
+
     size_t number_of_states() const {
         return transitions.size();
     }
@@ -301,6 +328,81 @@ struct WTT {
 
 std::ostream& operator<<(std::ostream& os, const WTT::Transition& wtt_transition);
 std::ostream& operator<<(std::ostream& os, const WTT& wtt);
+
+
+struct WTT_Builder {
+    s64 initial_state = -1;
+    Bit_Set leaf_states;
+    std::map<State, std::vector<WTT::Transition>> transitions;
+    u64 internal_symbol_cnt;
+
+    WTT_Builder(SWTA::Metadata& metadata) : leaf_states(0), internal_symbol_cnt(metadata.number_of_internal_symbols) {};
+
+    void mark_state_initial(State state) {
+        this->initial_state = state;
+    }
+
+    void mark_state_final(State state) {
+        this->leaf_states.grow_and_set_bit(state);
+    }
+
+    void add_transition(State source, Internal_Symbol symbol, const WTT::Transition& transition) {
+        auto& transitions_from_source = this->transitions[source];
+        if (transitions_from_source.empty()) transitions_from_source.resize(this->internal_symbol_cnt);
+
+        transitions_from_source[symbol] = transition;
+    }
+
+    State find_largest_referenced_state_in_transitions() const {
+        s64 max_state = -1;
+        for (auto& [source, transitions]: this->transitions) {
+            for (auto& transition : transitions) {
+                for (auto& component : transition.ll.components) {
+                    max_state = std::max(max_state, static_cast<s64>(component.state));
+                }
+                for (auto& component : transition.lr.components) {
+                    max_state = std::max(max_state, static_cast<s64>(component.state));
+                }
+                for (auto& component : transition.rl.components) {
+                    max_state = std::max(max_state, static_cast<s64>(component.state));
+                }
+                for (auto& component : transition.rr.components) {
+                    max_state = std::max(max_state, static_cast<s64>(component.state));
+                }
+            }
+        }
+        assert (max_state >= 0);
+        return max_state;
+    }
+
+    WTT build(s64 state_cnt = -1) {
+        if (state_cnt < 0) {
+            state_cnt = this->find_largest_referenced_state_in_transitions();
+        }
+
+        assert(this->initial_state >= 0);
+
+        std::vector<std::vector<WTT::Transition>> result_transitions;
+        result_transitions.resize(state_cnt);
+
+        for (auto& [source, transitions_from_state] : this->transitions) {
+            result_transitions[source] = std::move(transitions_from_state);
+        }
+
+        for (auto& transitions_from_state : result_transitions) {
+            if (transitions_from_state.empty()) {
+                transitions_from_state.resize(this->internal_symbol_cnt);
+            }
+        }
+
+        this->leaf_states.grow(state_cnt);
+
+        WTT transducer (result_transitions, this->leaf_states, {static_cast<u64>(this->initial_state)});
+        return transducer;
+    }
+};
+
+
 
 /**
  * Compute a transducer that is equivalent to first appyling the `first` transducer and then the `second`.

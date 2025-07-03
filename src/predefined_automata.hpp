@@ -5,19 +5,29 @@
 
 
 enum class Predefined_WTT_Names : u64 {
-    HADAMARD = 0,
+    HADAMARD    = 0,
     PARITY_CNOT = 1,
+
+    GROVER_FIRST_MULTI_Z  =  8,
+    GROVER_SECOND_MULTI_Z =  9,
+    GROVER_X              = 10,
+    GROVER_H              = 11,
+    GROVER_FIRST_MULTI_Z_USING_CCX  = 12,
+    GROVER_SECOND_MULTI_Z_USING_CCX = 13,
 };
 
 enum class Predefined_SWTA_Names : u64 {
     BV_EXAMPLE_10STAR_PRE = 0,
     BV_EXAMPLE_10STAR_POST = 1,
     BV_EXAMPLE_10STAR_RESULT = 2,
+
     TRIVIAL_BOT = 3,   // Used for tests
     TRIVIAL_ONES = 4,  // Used for tests
     TEST_BV_EXAMPLE_AFTER_STEP1 = 5,
     TEST_BV_EXAMPLE_AFTER_STEP2 = 6,
     TEST_BV_EXAMPLE_AFTER_STEP3 = 7,
+
+    GROVER_ALL_BASIS = 8,
 };
 
 struct Def_State;
