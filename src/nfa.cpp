@@ -2,6 +2,7 @@
 #include "basics.hpp"
 
 #include <map>
+#include <algorithm>
 #include <sstream>
 
 
@@ -79,7 +80,8 @@ NFA NFA::determinize() const {
         auto macrostate = worklist.back();
         worklist.pop_back();
 
-        if (this->final_states.is_superset(macrostate->state_set)) { // All of the states in macrostate can make a leaf transition
+        if (!this->final_states.is_intersection_empty(macrostate->state_set)) {
+            // There is at least one state that can make a leaf transition
             final_macrostates.grow_and_set_bit(macrostate->handle);
         }
 
@@ -109,10 +111,16 @@ NFA NFA::determinize() const {
     }
 
     std::vector<NFA::Transitions_From_State> ordered_resulting_transitions;
-    ordered_resulting_transitions.resize(resulting_transitions.size());
+    ordered_resulting_transitions.resize(handles.size());
 
     for (auto& [state, transitions_from_state] : resulting_transitions) {
         ordered_resulting_transitions[state] = transitions_from_state;
+    }
+
+    for (State state = 0; state < handles.size(); state++) {
+        if (ordered_resulting_transitions[state].empty()) {
+            ordered_resulting_transitions[state].resize(this->alphabet_size());
+        }
     }
 
     NFA result ({0}, final_macrostates, ordered_resulting_transitions);
@@ -158,8 +166,12 @@ void NFA::write_dot(std::ostream& stream) const {
     }
     for (State state = 0; state < this->number_of_states(); state++) {
         stream << "  q" << state;
+        const char* color = this->final_states.get_bit_value(state) ? "green" : "black";
         if (this->debug_data != nullptr && this->debug_data->state_names.contains(state)) {
-            stream << " [label=\"" << this->debug_data->state_names.at(state) << "\"]";
+            stream << " ["
+                   << "label=\"" << this->debug_data->state_names.at(state) << "\", "
+                   << "color=\"" << color << "\""
+                   << "]";
         }
         stream << "\n";
     }
@@ -217,3 +229,46 @@ std::ostream& operator<<(std::ostream& os, const State_Pair& state) {
     return os;
 }
 
+
+NFA NFA_Builder::build(s64 state_cnt) {
+    std::vector<NFA::Transitions_From_State> result_transitions;
+
+    if (state_cnt < 0) {
+        for (auto& [state, outgoing_transitions] : this->transitions) {
+            for (auto& post_vector : outgoing_transitions) {
+                NFA::State post_vector_max = *std::max_element(post_vector.begin(), post_vector.end());
+                state_cnt = std::max(state_cnt, static_cast<s64>(post_vector_max));
+            }
+        }
+    }
+
+    result_transitions.resize(state_cnt);
+
+    for (auto& [state, transitions_from_state] : this->transitions) {
+        result_transitions[state].resize(this->alphabet_size);
+
+        for (u64 symbol = 0; symbol < this->alphabet_size; symbol++) {
+            result_transitions[state][symbol] = std::vector<NFA::State>(transitions_from_state[symbol].begin(), transitions_from_state[symbol].end());
+        }
+    }
+
+    for (NFA::State state = 0; state < state_cnt; state++) {
+        if (result_transitions[state].empty()) {
+            result_transitions[state].resize(this->alphabet_size);
+        }
+    }
+
+    final_states.grow(state_cnt);
+
+    NFA result ({0}, final_states, result_transitions);
+    return result;
+}
+
+void NFA_Builder::add_transition(NFA::State source_state, u64 symbol, NFA::State destination) {
+    auto& transitions_from_state = this->transitions[source_state];
+    if (transitions_from_state.empty()) {
+        transitions_from_state.resize(this->alphabet_size);
+    }
+
+    transitions_from_state[symbol].insert(destination);
+}

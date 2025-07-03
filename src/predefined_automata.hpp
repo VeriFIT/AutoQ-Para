@@ -15,6 +15,9 @@ enum class Predefined_SWTA_Names : u64 {
     BV_EXAMPLE_10STAR_RESULT = 2,
     TRIVIAL_BOT = 3,   // Used for tests
     TRIVIAL_ONES = 4,  // Used for tests
+    TEST_BV_EXAMPLE_AFTER_STEP1 = 5,
+    TEST_BV_EXAMPLE_AFTER_STEP2 = 6,
+    TEST_BV_EXAMPLE_AFTER_STEP3 = 7,
 };
 
 struct Def_State;
@@ -58,7 +61,7 @@ struct Def_Linear_Form {
 
 
 
-WTT get_predefined_wtt(Predefined_WTT_Names name);
+WTT get_predefined_wtt(Predefined_WTT_Names name, const SWTA::Metadata& metadata);
 
 SWTA get_predefined_swta(Predefined_SWTA_Names name);
 

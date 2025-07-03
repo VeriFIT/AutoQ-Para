@@ -1,5 +1,6 @@
 #include "arith.hpp"
 #include "bit_set.hpp"
+#include "quantum_program.hpp"
 #include "swta.hpp"
 #include "weighted_automata.hpp"
 #include "predefined_automata.hpp"
@@ -318,13 +319,17 @@ TEST_CASE( "Zero Tests", "[Weighted automata]") {
 }
 
 TEST_CASE("Sequential composition of two Hadamards", "[WTT]") {
-    auto hadamard = get_predefined_wtt(Predefined_WTT_Names::HADAMARD);
+    SWTA::Metadata metadata = {
+        .number_of_internal_symbols = 1,
+        .number_of_colors = 0,
+    };
+    auto hadamard = get_predefined_wtt(Predefined_WTT_Names::HADAMARD, metadata);
     auto result = compose_wtts_sequentially(hadamard, hadamard);
 
     REQUIRE(result.initial_states.size() == 1);
     result.normalize_all_transitions();
 
-    REQUIRE(result.get_number_of_internal_symbols() == 1);
+    REQUIRE(result.number_of_internal_symbols() == 1);
     auto& transitions_along_sym0 = result.transitions[0];
 
     REQUIRE(transitions_along_sym0.size() == 1);  // There should be only one state
@@ -428,9 +433,68 @@ TEST_CASE("Build first affine program", "[Affine programs]") {
 }
 
 TEST_CASE("Are two SWTAs color equivalent", "[Affine programs]") {
-    auto bv_example_post   = get_predefined_swta(Predefined_SWTA_Names::TRIVIAL_BOT);
-    auto bv_example_result = get_predefined_swta(Predefined_SWTA_Names::TRIVIAL_ONES);
+    auto bv_example_post   = get_predefined_swta(Predefined_SWTA_Names::BV_EXAMPLE_10STAR_POST);
+    auto bv_example_result = get_predefined_swta(Predefined_SWTA_Names::BV_EXAMPLE_10STAR_RESULT);
 
     bool are_equivalent = are_two_swtas_color_equivalent(bv_example_post, bv_example_result);
-    std::cout << "Are equivalent?: " << are_equivalent << "\n";
+    REQUIRE(are_equivalent);
+}
+
+TEST_CASE("Test BV example correcness step by step") {
+    // -------- Step 1 - apply hadamard to precondition -------
+    SWTA expected_swta = get_predefined_swta(Predefined_SWTA_Names::TEST_BV_EXAMPLE_AFTER_STEP1);
+
+    SWTA initial_swta = get_predefined_swta(Predefined_SWTA_Names::BV_EXAMPLE_10STAR_PRE);
+    WTT  hadamard     = get_predefined_wtt(Predefined_WTT_Names::HADAMARD, expected_swta.get_metadata());
+    SWTA after_step1  = apply_wtt_to_swta(initial_swta, hadamard);
+
+    bool are_equivalent = are_two_swtas_color_equivalent(expected_swta, after_step1);
+    REQUIRE(are_equivalent);
+
+    // -------- Step 2 - apply parity_cnot to the result of the previous step -------
+    SWTA expected_swta2 = get_predefined_swta(Predefined_SWTA_Names::TEST_BV_EXAMPLE_AFTER_STEP2);
+
+    WTT  cnot_parity  = get_predefined_wtt(Predefined_WTT_Names::PARITY_CNOT, expected_swta2.get_metadata());
+    SWTA after_step2  = apply_wtt_to_swta(after_step1, cnot_parity);
+
+    bool are_equivalent2 = are_two_swtas_color_equivalent(expected_swta2, after_step2);
+    REQUIRE(are_equivalent2);
+
+    // -------- Step 3 - apply hadamard to the result of the previous step -------
+    SWTA expected_swta3 = get_predefined_swta(Predefined_SWTA_Names::TEST_BV_EXAMPLE_AFTER_STEP3);
+
+    SWTA after_step3  = apply_wtt_to_swta(after_step2, hadamard);
+
+    bool are_equivalent3 = are_two_swtas_color_equivalent(expected_swta3, after_step3);
+    REQUIRE(are_equivalent3);
+}
+
+TEST_CASE("Run SWTA Program") {
+    SWTA::Metadata swta_metadata = {
+        .number_of_internal_symbols = 2, // Work qubit and ancilla
+        .number_of_colors = 1
+    };
+
+    std::vector<WTT> needed_transducers {
+        get_predefined_wtt(Predefined_WTT_Names::HADAMARD, swta_metadata),
+        get_predefined_wtt(Predefined_WTT_Names::PARITY_CNOT, swta_metadata),
+    };
+
+    std::vector<Transducer_Application> applications {
+        Transducer_Application(0), // Hadamard
+        Transducer_Application(1), // CNOT
+        Transducer_Application(0), // Hadamard
+    };
+
+    SWTA_Program program {
+        .initial_swta = get_predefined_swta(Predefined_SWTA_Names::BV_EXAMPLE_10STAR_PRE),
+        .transducers = needed_transducers,
+        .applications = applications,
+    };
+
+    SWTA post_condition = get_predefined_swta(Predefined_SWTA_Names::BV_EXAMPLE_10STAR_POST);
+    SWTA result         = run_swta_program(program);
+
+    bool is_our_bv_correct = are_two_swtas_color_equivalent(result, post_condition);
+    std::cout << "Is our BV correct? " << is_our_bv_correct << "\n";
 }

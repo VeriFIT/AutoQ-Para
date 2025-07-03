@@ -37,26 +37,31 @@ SWTA::Transition synthetize_swta_transition(const std::vector<Def_Linear_Form>& 
     return SWTA::Transition(ll, rr);
 }
 
-WTT get_predefined_wtt(Predefined_WTT_Names name) {
+WTT get_predefined_wtt(Predefined_WTT_Names name, const SWTA::Metadata& swta_metadata) {
+    using DLF = std::vector<Def_Linear_Form>;
+    using ACN = Algebraic_Complex_Number;
+
     if (name == Predefined_WTT_Names::HADAMARD) {
         // q0 -> LEFT{ 1/sqrt(2)(q0, L) + 1/sqrt(2)(q0, R) }, RIGHT{ 1/sqrt(2)(q0, L) - 1/sqrt(2)(q0, R) }
         // q0(left) -> (left)
 
-        Linear_Form::Component ll_component (Algebraic_Complex_Number::ONE_OVER_SQRT2(), 0);
-        Linear_Form ll ({ll_component});
+        State q0 = 0;
 
-        Linear_Form::Component lr_component (Algebraic_Complex_Number::ONE_OVER_SQRT2(), 0);
-        Linear_Form lr ({lr_component});
+        std::vector<std::vector<WTT::Transition>> transitions_by_symbol;
+        transitions_by_symbol.resize(1);
 
-        Linear_Form::Component rl_component (Algebraic_Complex_Number::ONE_OVER_SQRT2(), 0);
-        Linear_Form rl ({rl_component});
+        Def_Coef one_over_sqrt2       ( Algebraic_Complex_Number::ONE_OVER_SQRT2());
+        Def_Coef minus_one_over_sqrt2 (-Algebraic_Complex_Number::ONE_OVER_SQRT2());
 
-        Linear_Form::Component rr_component (-Algebraic_Complex_Number::ONE_OVER_SQRT2(), 0);
-        Linear_Form rr ({rr_component});
+        for (Internal_Symbol symbol = 0; symbol < swta_metadata.number_of_internal_symbols; symbol++) {
+            DLF left_subtree  {one_over_sqrt2 * q0 * Subtree_Tag::LEFT, one_over_sqrt2 * q0 * Subtree_Tag::RIGHT};
+            DLF right_subtree {one_over_sqrt2 * q0 * Subtree_Tag::LEFT, minus_one_over_sqrt2 * q0 * Subtree_Tag::RIGHT};
+            WTT::Transition transition = synthetize_wtt_transition(left_subtree, right_subtree);
 
-        WTT::Transition transition (ll, lr, rl, rr);
+            transitions_by_symbol[0].push_back(transition);
+        }
 
-        WTT transducer ({{transition}}, {0}, {0});
+        WTT transducer (transitions_by_symbol, {0}, {0});
         return transducer;
     }
 
@@ -68,8 +73,16 @@ WTT get_predefined_wtt(Predefined_WTT_Names name) {
         State a1 = 2; // Odd qubit, odd parity
         State b1 = 3; // Even qubit, odd parity
 
-        std::vector<WTT::Transition> work_qubit_transitions;  // @Care: The order of pushing is important, indexes are sourcestates
-        std::vector<WTT::Transition> ancilla_transitions;
+        size_t state_cnt = 4;
+        size_t internal_symbol_cnt = 2;
+
+        Internal_Symbol work_qubit = 0, ancilla = 1;
+
+        std::vector<std::vector<WTT::Transition>> transitions;
+        transitions.resize(4);
+        for (State state = 0; state < state_cnt; state++) {
+            transitions[state].resize(internal_symbol_cnt);
+        }
 
         // MOVE: a0 -w-> b0(L), b1(r)
         {
@@ -80,7 +93,8 @@ WTT get_predefined_wtt(Predefined_WTT_Names name) {
             Linear_Form rr ({rr_component});
 
             WTT::Transition transition (ll, {}, {}, rr);
-            work_qubit_transitions.push_back(transition);
+
+            transitions[a0][work_qubit] = transition;
         }
 
         // MOVE: b0 -w-> a0(L), a0(r)
@@ -89,7 +103,8 @@ WTT get_predefined_wtt(Predefined_WTT_Names name) {
             Linear_Form ll ({ll_component});
 
             WTT::Transition transition (ll, {}, {}, ll);
-            work_qubit_transitions.push_back(transition);
+
+            transitions[b0][work_qubit] = transition;
         }
 
         // MOVE: a1 -w-> b1(L), b0(r)
@@ -101,7 +116,8 @@ WTT get_predefined_wtt(Predefined_WTT_Names name) {
             Linear_Form rr ({rr_component});
 
             WTT::Transition transition (ll, {}, {}, rr);
-            work_qubit_transitions.push_back(transition);
+
+            transitions[a1][work_qubit] = transition;
         }
 
         // MOVE: b1 -w-> a1(L), a1(r)
@@ -110,28 +126,33 @@ WTT get_predefined_wtt(Predefined_WTT_Names name) {
             Linear_Form ll ({ll_component});
 
             WTT::Transition transition (ll, {}, {}, ll);
-            work_qubit_transitions.push_back(transition);
+
+            transitions[b1][work_qubit] = transition;
         }
 
-        // MOVE: a0 -a-> b0(L), b0(r), b0 -a-> b0(L), b0(r)
+        // MOVE: a0 -a-> b0(L), b0(r)
+        // MOVE: b0 -a-> b0(L), b0(r)
         {
             std::vector<Def_Linear_Form> left_subtree  {Def_Coef(Algebraic_Complex_Number::ONE()) * b0 * Subtree_Tag::LEFT};
             std::vector<Def_Linear_Form> right_subtree {Def_Coef(Algebraic_Complex_Number::ONE()) * b0 * Subtree_Tag::RIGHT};
             WTT::Transition transition = synthetize_wtt_transition(left_subtree, right_subtree);
-            ancilla_transitions.push_back(transition);
-            ancilla_transitions.push_back(transition);
+
+            transitions[a0][ancilla] = transition;
+            transitions[b0][ancilla] = transition;
         }
 
-        // MOVE: a1 -a-> b0(R), b0(L), b1 -a-> b0(R), b0(L)
+        // MOVE: a1 -a-> b0(R), b0(L)
+        // MOVE: b1 -a-> b0(R), b0(L)
         {
             std::vector<Def_Linear_Form> left_subtree  {Def_Coef(Algebraic_Complex_Number::ONE()) * b0 * Subtree_Tag::RIGHT};
             std::vector<Def_Linear_Form> right_subtree {Def_Coef(Algebraic_Complex_Number::ONE()) * b0 * Subtree_Tag::LEFT};
             WTT::Transition transition = synthetize_wtt_transition(left_subtree, right_subtree);
-            ancilla_transitions.push_back(transition);
-            ancilla_transitions.push_back(transition);
+
+            transitions[a1][ancilla] = transition;
+            transitions[b1][ancilla] = transition;
         }
 
-        WTT transducer ({work_qubit_transitions, ancilla_transitions}, {b0}, {a0});
+        WTT transducer (transitions, {b0}, {a0});
         return transducer;
     }
 
@@ -183,6 +204,7 @@ SWTA get_predefined_swta(Predefined_SWTA_Names name) {
         auto transition_fn = builder.build(3);
 
         SWTA result (transition_fn, initial_states, leaf_states);
+        return result;
     }
 
     if (name == Predefined_SWTA_Names::BV_EXAMPLE_10STAR_POST) {
@@ -224,7 +246,7 @@ SWTA get_predefined_swta(Predefined_SWTA_Names name) {
              DLF left_subtree  {Def_Coef(Algebraic_Complex_Number::ZERO()) * q_bot};
              DLF right_subtree {Def_Coef(Algebraic_Complex_Number::ONE()) * q_c};
              auto transition = synthetize_swta_transition(left_subtree, right_subtree);
-             builder.add_transition(q_g, sym_a, c, transition);
+             builder.add_transition(q_h, sym_a, c, transition);
         }
 
         builder.add_bot_state_transitions(q_bot);
@@ -237,7 +259,7 @@ SWTA get_predefined_swta(Predefined_SWTA_Names name) {
         return result;
     }
 
-    if (name == Predefined_SWTA_Names::BV_EXAMPLE_10STAR_RESULT) {
+    if (name == Predefined_SWTA_Names::BV_EXAMPLE_10STAR_RESULT || name == Predefined_SWTA_Names::TEST_BV_EXAMPLE_AFTER_STEP3) {
         State q_gamma   = 0;
         State q_delta   = 1;
         State q_epsilon = 2;
@@ -368,6 +390,116 @@ SWTA get_predefined_swta(Predefined_SWTA_Names name) {
         return result;
     }
 
+    if (name == Predefined_SWTA_Names::TEST_BV_EXAMPLE_AFTER_STEP1) {
+        State q_alpha  = 0;
+        State q_beta   = 1;
+
+        Internal_Symbol working_qubit = 0, ancilla = 1;
+        Color c = 0;
+
+        SWTA::Metadata metadata = { .number_of_internal_symbols = 2, .number_of_colors = 1 };
+        SWTA::Transition_Builder builder (metadata);
+
+        { // q_alpha --w--> (1/sqrt(2) q_alpha, 1/sqrt(2) q_alpha)
+             DLF left_subtree  {Def_Coef(ACN::ONE_OVER_SQRT2()) * q_alpha};
+             DLF right_subtree {Def_Coef(ACN::ONE_OVER_SQRT2()) * q_alpha};
+             auto transition = synthetize_swta_transition(left_subtree, right_subtree);
+             builder.add_transition(q_alpha, working_qubit, c, transition);
+        }
+
+        { // q_alpha --a--> (1/sqrt(2) q_beta, 1/sqrt(2) q_beta)
+             DLF left_subtree  {Def_Coef(ACN::ONE_OVER_SQRT2()) * q_beta};
+             DLF right_subtree {Def_Coef(-ACN::ONE_OVER_SQRT2()) * q_beta};
+             auto transition = synthetize_swta_transition(left_subtree, right_subtree);
+             builder.add_transition(q_alpha, ancilla, c, transition);
+        }
+
+        std::vector<State> initial_states ({q_alpha});
+        Bit_Set leaf_states (2, {q_beta});
+        auto transition_fn = builder.build(2);
+        SWTA result (transition_fn, initial_states, leaf_states);
+
+        return result;
+    }
+
+    if (name == Predefined_SWTA_Names::TEST_BV_EXAMPLE_AFTER_STEP2) {
+        State q_gamma   = 0;
+        State q_delta   = 1;
+        State q_epsilon = 2;
+        State q_mu      = 3;
+        State q_sigma   = 4;
+
+        u64 number_of_states = 5;
+
+        Internal_Symbol working_qubit = 0, ancilla = 1;
+        Color c = 0;
+
+        SWTA::Metadata metadata = { .number_of_internal_symbols = 2, .number_of_colors = 1 };
+        SWTA::Transition_Builder builder (metadata);
+
+        { // q_gamma --w--> (1/sqrt(2) q_delta, 1/sqrt(2) q_epsilon)
+             DLF left_subtree  {Def_Coef(ACN::ONE_OVER_SQRT2()) * q_delta};
+             DLF right_subtree {Def_Coef(ACN::ONE_OVER_SQRT2()) * q_epsilon};
+             auto transition = synthetize_swta_transition(left_subtree, right_subtree);
+             builder.add_transition(q_gamma, working_qubit, c, transition);
+        }
+
+        { // q_delta --w--> (1/sqrt(2) q_beta, 1/sqrt(2) q_beta)
+             DLF left_subtree  {Def_Coef(ACN::ONE_OVER_SQRT2()) * q_gamma};
+             DLF right_subtree {Def_Coef(ACN::ONE_OVER_SQRT2()) * q_gamma};
+             auto transition = synthetize_swta_transition(left_subtree, right_subtree);
+             builder.add_transition(q_delta, working_qubit, c, transition);
+        }
+
+        { // q_epsilon --w--> (1/sqrt(2) q_mu, 1/sqrt(2) q_mu)
+             DLF left_subtree  {Def_Coef(ACN::ONE_OVER_SQRT2()) * q_mu};
+             DLF right_subtree {Def_Coef(ACN::ONE_OVER_SQRT2()) * q_mu};
+             auto transition = synthetize_swta_transition(left_subtree, right_subtree);
+             builder.add_transition(q_epsilon, working_qubit, c, transition);
+        }
+
+        { // q_mu --w--> (1/sqrt(2) q_epsilon, 1/sqrt(2) q_delta)
+             DLF left_subtree  {Def_Coef(ACN::ONE_OVER_SQRT2()) * q_epsilon};
+             DLF right_subtree {Def_Coef(ACN::ONE_OVER_SQRT2()) * q_delta};
+             auto transition = synthetize_swta_transition(left_subtree, right_subtree);
+             builder.add_transition(q_mu, working_qubit, c, transition);
+        }
+
+        { // q_gamma --a--> (1/sqrt(2) q_sigma, -1/sqrt(2) q_sigma)
+             DLF left_subtree  {Def_Coef( ACN::ONE_OVER_SQRT2()) * q_sigma};
+             DLF right_subtree {Def_Coef(-ACN::ONE_OVER_SQRT2()) * q_sigma};
+             auto transition = synthetize_swta_transition(left_subtree, right_subtree);
+             builder.add_transition(q_gamma, ancilla, c, transition);
+        }
+
+        { // q_delta --a--> (1/sqrt(2) q_sigma, -1/sqrt(2) q_sigma)
+             DLF left_subtree  {Def_Coef( ACN::ONE_OVER_SQRT2()) * q_sigma};
+             DLF right_subtree {Def_Coef(-ACN::ONE_OVER_SQRT2()) * q_sigma};
+             auto transition = synthetize_swta_transition(left_subtree, right_subtree);
+             builder.add_transition(q_delta, ancilla, c, transition);
+        }
+
+        { // q_epsilon --a--> (-1/sqrt(2) q_sigma, 1/sqrt(2) q_sigma)
+             DLF left_subtree  {Def_Coef(-ACN::ONE_OVER_SQRT2()) * q_sigma};
+             DLF right_subtree {Def_Coef( ACN::ONE_OVER_SQRT2()) * q_sigma};
+             auto transition = synthetize_swta_transition(left_subtree, right_subtree);
+             builder.add_transition(q_epsilon, ancilla, c, transition);
+        }
+
+        { // q_mu --a--> (-1/sqrt(2) q_sigma, 1/sqrt(2) q_sigma)
+             DLF left_subtree  {Def_Coef(-ACN::ONE_OVER_SQRT2()) * q_sigma};
+             DLF right_subtree {Def_Coef( ACN::ONE_OVER_SQRT2()) * q_sigma};
+             auto transition = synthetize_swta_transition(left_subtree, right_subtree);
+             builder.add_transition(q_mu, ancilla, c, transition);
+        }
+
+        std::vector<State> initial_states ({q_gamma});
+        Bit_Set leaf_states (number_of_states, {q_sigma});
+        auto transition_fn = builder.build(number_of_states);
+        SWTA result (transition_fn, initial_states, leaf_states);
+
+        return result;
+    }
 
     throw std::runtime_error("No definition for the predefined SWTA: " + std::to_string(static_cast<u64>(name)));
 }

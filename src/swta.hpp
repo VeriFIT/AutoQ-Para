@@ -5,7 +5,6 @@
 #include "nfa.hpp"
 #include "basics.hpp"
 
-#include <future>
 #include <map>
 #include <vector>
 
@@ -131,8 +130,12 @@ struct SWTA {
                     }
                 }
 
-                resulting_transitions[source_state] = std::move(transitions_from_state);
+                resulting_transitions[source_state] = transitions_from_state;
                 next_state = source_state + 1;
+            }
+
+            for (u64 hole_state = next_state; hole_state < static_cast<u64>(state_cnt); hole_state++) {
+                init_empty_transitions_for_state(resulting_transitions, hole_state);
             }
 
             return resulting_transitions;
@@ -226,6 +229,7 @@ struct WTT {
         Linear_Form rl;  // Right successor, its left subtree inputs
         Linear_Form rr;  // Right successor, its right subtree inputs
 
+        Transition() {}
         Transition(Linear_Form ll, Linear_Form lr, Linear_Form rl, Linear_Form rr) : ll(ll), lr(lr), rl(rl), rr(rr) {}
 
         bool is_present() const {
@@ -267,11 +271,11 @@ struct WTT {
     };
 
     size_t number_of_states() const {
-        return transitions[0].size();
+        return transitions.size();
     }
 
     size_t number_of_colors() const {
-        return 1;  // @Todo: Figure out what are colors and what are internal symbols
+        return 0;
     }
 
     void normalize_all_transitions() {
@@ -287,7 +291,7 @@ struct WTT {
         }
     }
 
-    u64 get_number_of_internal_symbols() const {
+    u64 number_of_internal_symbols() const {
         return this->transitions.size();
     }
 
@@ -519,3 +523,5 @@ struct Color_Symbol_Abstraction {
 Affine_Program<Branch_Selector> build_affine_program(const SWTA& swta, const Color_Symbol_Abstraction& color_sym_abstraction);
 
 Color_Symbol_Abstraction build_color_internal_symbol_abstraction(const SWTA& swta);
+
+SWTA apply_wtt_to_swta(const SWTA& swta, const WTT& wtt);

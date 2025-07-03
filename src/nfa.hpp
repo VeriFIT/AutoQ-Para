@@ -4,6 +4,7 @@
 #include "bit_set.hpp"
 
 #include <map>
+#include <set>
 #include <string>
 #include <sstream>
 
@@ -80,6 +81,27 @@ struct NFA {
     bool complete();
     bool is_every_state_accepting() const;
     void write_dot(std::ostream& stream) const;
+};
+
+
+struct NFA_Builder {
+    std::map<NFA::State, std::vector<std::set<NFA::State>>> transitions;
+    std::vector<NFA::State> initial_states;
+    Bit_Set final_states;
+    u64 alphabet_size;
+
+    NFA_Builder(u64 alphabet_size) : alphabet_size(alphabet_size), final_states(0) {};
+
+    void mark_state_initial(NFA::State state) {
+        this->initial_states.push_back(state);
+    }
+
+    void mark_state_final(NFA::State state) {
+        this->final_states.grow_and_set_bit(state);
+    }
+
+    void add_transition(NFA::State source_state, u64 symbol, NFA::State destination);
+    NFA build(s64 state_cnt = -1);
 };
 
 

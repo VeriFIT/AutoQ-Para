@@ -1,9 +1,10 @@
 #pragma once
 
-#include "arith.hpp"
+#include "basics.hpp"
 
+#include <vector>
 #include <cstring>
-
+#include <cassert>
 #include <bit>  // For popcount
 
 struct Bit_Set {
