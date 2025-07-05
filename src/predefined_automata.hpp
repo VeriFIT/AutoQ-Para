@@ -8,12 +8,15 @@ enum class Predefined_WTT_Names : u64 {
     HADAMARD    = 0,
     PARITY_CNOT = 1,
 
+    TEST_STAIRCASE_IDENTITY3 = 2,
+
     GROVER_FIRST_MULTI_Z  =  8,
     GROVER_SECOND_MULTI_Z =  9,
     GROVER_X              = 10,
     GROVER_H              = 11,
     GROVER_FIRST_MULTI_Z_USING_CCX  = 12,
     GROVER_SECOND_MULTI_Z_USING_CCX = 13,
+
 };
 
 enum class Predefined_SWTA_Names : u64 {

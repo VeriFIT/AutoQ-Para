@@ -21,5 +21,5 @@ add_executable(runner runner.cpp)
 
 target_link_libraries(runner PRIVATE acn gmp)
 
-add_executable(tests tests.cpp arith.cpp weighted_automata.cpp swta.cpp predefined_automata.cpp bit_set.cpp nfa.cpp quantum_program.cpp)
+add_executable(tests tests.cpp arith.cpp weighted_automata.cpp swta.cpp predefined_automata.cpp bit_set.cpp nfa.cpp swta_builders.cpp quantum_program.cpp)
 target_link_libraries(tests PRIVATE acn gmp)

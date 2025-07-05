@@ -110,7 +110,9 @@ std::ostream& operator<<(std::ostream& os, const WTT& wtt) {
 
     for (u64 state = 0; state < wtt.number_of_states(); state++) {
         const std::vector<WTT::Transition>& transitions_from_state = wtt.transitions[state];
-        for (Internal_Symbol sym = 0; sym < wtt.transitions.size(); sym++) {
+        for (Internal_Symbol sym = 0; sym < wtt.number_of_internal_symbols(); sym++) {
+            auto& transition = transitions_from_state[sym];
+            if (!transition.is_present()) continue;
             os << "  " << state << "--(sym=" << sym << ")-->: " << transitions_from_state[sym] << "\n";
         }
     }

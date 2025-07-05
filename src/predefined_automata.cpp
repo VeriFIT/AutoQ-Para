@@ -595,6 +595,50 @@ WTT get_predefined_wtt(Predefined_WTT_Names name, const SWTA::Metadata& swta_met
         return result;
     }
 
+    if (name == Predefined_WTT_Names::TEST_STAIRCASE_IDENTITY3) {
+        State q3     = 0;
+        State q2     = 1;
+        State q1     = 2;
+        State q_leaf = 3;
+
+        u64 number_of_states = 4;
+
+        Internal_Symbol working_qubit = 0, ancilla = 1;
+        Color color = 0;
+
+        SWTA::Metadata metadata = { .number_of_internal_symbols = 2, .number_of_colors = 1 };
+        WTT_Builder builder (metadata);
+
+        builder.mark_state_initial(q3);
+        builder.mark_state_final(q_leaf);
+
+        Def_Coef one (  ACN::ONE());
+        Def_Coef two (ACN(2, 0, 0, 0, 0));
+
+        { // q3 --w--> ( q2(L), q2(R) )
+             DLF left_subtree  {two * q2 * Subtree_Tag::LEFT};
+             DLF right_subtree {two * q2 * Subtree_Tag::RIGHT};
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(q3, working_qubit, transition);
+        }
+
+        { // q2 --a--> ( q1(L), q1(R) )
+             DLF left_subtree  {two * q1 * Subtree_Tag::LEFT};
+             DLF right_subtree {two * q1 * Subtree_Tag::RIGHT};
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(q2, ancilla, transition);
+        }
+
+        { // q1 --w--> ( q_leaf(L), q_leaf(R) )
+             DLF left_subtree  {one * q_leaf * Subtree_Tag::LEFT};
+             DLF right_subtree {one * q_leaf * Subtree_Tag::RIGHT};
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(q1, working_qubit, transition);
+        }
+
+        WTT result = builder.build(number_of_states);
+        return result;
+    }
 
     throw std::runtime_error("Unknown WTT. " + std::to_string(static_cast<u64>(name)));
 }

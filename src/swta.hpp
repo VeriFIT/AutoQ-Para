@@ -319,7 +319,7 @@ struct WTT {
     }
 
     u64 number_of_internal_symbols() const {
-        return this->transitions.size();
+        return this->transitions[0].size();
     }
 
     bool does_state_accept_trees_for_any_colored_sequence(State state) const;

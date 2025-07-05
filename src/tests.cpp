@@ -2,6 +2,7 @@
 #include "bit_set.hpp"
 #include "quantum_program.hpp"
 #include "swta.hpp"
+#include "swta_builders.hpp"
 #include "weighted_automata.hpp"
 #include "predefined_automata.hpp"
 
@@ -554,4 +555,18 @@ TEST_CASE("CnZ vs CCX-impl") {
         result_for_hw
     );
     REQUIRE(is_our_impl_correct);
+}
+
+TEST_CASE("Staircase composition of identities") {
+    SWTA::Metadata metadata = {
+        .number_of_internal_symbols = 2,
+        .number_of_colors = 1,
+    };
+    WTT box = get_predefined_wtt(Predefined_WTT_Names::TEST_STAIRCASE_IDENTITY3, metadata);
+
+    Internal_Symbol terminating_symbol = 2; // Working qubit = 0, ancilla = 1
+    u64 offset = 2;
+    WTT result = perform_staircase_construction(box, {0, 1, 0}, offset, terminating_symbol);
+
+    std::cout << result << "\n";
 }
