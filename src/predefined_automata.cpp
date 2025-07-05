@@ -640,6 +640,386 @@ WTT get_predefined_wtt(Predefined_WTT_Names name, const SWTA::Metadata& swta_met
         return result;
     }
 
+    if (name == Predefined_WTT_Names::ADDER_UMA1 || name == Predefined_WTT_Names::ADDER_MAJ3) {
+        State q_maybe_swap0 = 0;
+        State q_maybe_swap1 = 1;
+        State q_no_swap1    = 2;
+        State q_no_swap2    = 3;
+        State q_swap        = 4;
+        State q_leaf        = 5;
+
+        u64 number_of_states = 6;
+
+        Internal_Symbol working_qubit = 0;
+        Color color = 0;
+
+        SWTA::Metadata metadata = { .number_of_internal_symbols = 1, .number_of_colors = 1 };
+        WTT_Builder builder (metadata);
+
+        builder.mark_state_initial(q_maybe_swap0);
+        builder.mark_state_final(q_leaf);
+
+        Def_Coef one (  ACN::ONE());
+
+        { // q_maybe_swap0 --w--> ( q_no_swap1(L), q_maybe_swap1(R) )
+             DLF left_subtree  {one * q_no_swap1    * Subtree_Tag::LEFT};
+             DLF right_subtree {one * q_maybe_swap1 * Subtree_Tag::RIGHT};
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(q_maybe_swap0, working_qubit, transition);
+        }
+
+        { // q_no_swap1 --w--> ( q_no_swap2(L), q_no_swap2(R) )
+             DLF left_subtree  {one * q_no_swap2 * Subtree_Tag::LEFT};
+             DLF right_subtree {one * q_no_swap2 * Subtree_Tag::RIGHT};
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(q_no_swap1, working_qubit, transition);
+        }
+
+        { // q_no_swap2 --w--> ( q_leaf(L), q_leaf(R) )
+             DLF left_subtree  {one * q_leaf * Subtree_Tag::LEFT};
+             DLF right_subtree {one * q_leaf * Subtree_Tag::RIGHT};
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(q_no_swap2, working_qubit, transition);
+        }
+
+        { // q_maybe_swap1 --w--> ( q_no_swap2(L), q_swap(R) )
+             DLF left_subtree  {one * q_no_swap2 * Subtree_Tag::LEFT};
+             DLF right_subtree {one * q_swap     * Subtree_Tag::RIGHT};
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(q_maybe_swap1, working_qubit, transition);
+        }
+
+        { // q_swap --w--> ( q_leaf(R), q_leaf(L) )
+             DLF left_subtree  {one * q_leaf * Subtree_Tag::RIGHT};
+             DLF right_subtree {one * q_leaf * Subtree_Tag::LEFT};
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(q_swap, working_qubit, transition);
+        }
+
+        WTT result = builder.build(number_of_states);
+        return result;
+    }
+
+    if (name == Predefined_WTT_Names::ADDER_UMA2 || name == Predefined_WTT_Names::ADDER_MAJ2) {
+        State root = 0;
+        State p_star1  = 1; // Project away all branches *1
+        State p_1      = 2;
+        State e_star1  = 3; // Extract (keep values of) the branches *1
+        State e_1      = 4;
+        State q_leaf   = 5;
+
+        u64 number_of_states = 6;
+
+        Internal_Symbol working_qubit = 0;
+        Color color = 0;
+
+        SWTA::Metadata metadata = { .number_of_internal_symbols = 1, .number_of_colors = 1 };
+        WTT_Builder builder (metadata);
+
+        builder.mark_state_initial(root);
+        builder.mark_state_final(q_leaf);
+
+        Def_Coef one  (ACN::ONE());
+        Def_Coef zero (ACN::ZERO());
+
+        { // root --w--> ( p_star1(L) + e_star1(R), p_star1(R) + e_star1(L) )
+             DLF left_subtree  { one * p_star1 * Subtree_Tag::LEFT, one * e_star1 * Subtree_Tag::RIGHT };
+             DLF right_subtree { one * p_star1 * Subtree_Tag::RIGHT, one * e_star1 * Subtree_Tag::LEFT };
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(root, working_qubit, transition);
+        }
+
+        { // p_star1 --w--> ( p_1(L), p_1(R))
+             DLF left_subtree  { one * p_1 * Subtree_Tag::LEFT };
+             DLF right_subtree { one * p_1 * Subtree_Tag::RIGHT };
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(p_star1, working_qubit, transition);
+        }
+
+        { // p_1 --w--> ( q_leaf(L), 0 q_leaf(R) )
+             DLF left_subtree  { one  * q_leaf * Subtree_Tag::LEFT };
+             DLF right_subtree { zero * q_leaf * Subtree_Tag::RIGHT };
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(p_1, working_qubit, transition);
+        }
+
+        { // e_star1 --w--> ( e_1(L), e_1(R))
+             DLF left_subtree  { one * e_1 * Subtree_Tag::LEFT };
+             DLF right_subtree { one * e_1 * Subtree_Tag::RIGHT };
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(e_star1, working_qubit, transition);
+        }
+
+        { // e_1 --w--> ( 0 q_leaf(L), q_leaf(R))
+             DLF left_subtree  { zero * q_leaf * Subtree_Tag::LEFT };
+             DLF right_subtree { one  * q_leaf * Subtree_Tag::RIGHT };
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(e_1, working_qubit, transition);
+        }
+
+        WTT result = builder.build(number_of_states);
+        return result;
+    }
+
+    if (name == Predefined_WTT_Names::ADDER_UMA3) {
+        State root      = 0;
+        State q_no_swap = 1;
+        State q_swap    = 2;
+        State q_id_1    = 3;
+        State q_leaf    = 4;
+
+        u64 number_of_states = 5;
+
+        Internal_Symbol working_qubit = 0;
+        Color color = 0;
+
+        SWTA::Metadata metadata = { .number_of_internal_symbols = 1, .number_of_colors = 1 };
+        WTT_Builder builder (metadata);
+
+        builder.mark_state_initial(root);
+        builder.mark_state_final(q_leaf);
+
+        Def_Coef one  (ACN::ONE());
+
+        { // root --w--> ( p_no_swap(L), q_swap(R) )
+             DLF left_subtree  { one * q_no_swap * Subtree_Tag::LEFT};
+             DLF right_subtree { one * q_swap    * Subtree_Tag::RIGHT};
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(root, working_qubit, transition);
+        }
+
+        { // q_no_swap --w--> ( q_id_1(L), q_id_1(R) )
+             DLF left_subtree  { one * q_id_1 * Subtree_Tag::LEFT};
+             DLF right_subtree { one * q_id_1 * Subtree_Tag::RIGHT};
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(q_no_swap, working_qubit, transition);
+        }
+
+        { // q_swap --w--> ( q_id_1(R), q_id_1(L) )
+             DLF left_subtree  { one * q_id_1 * Subtree_Tag::RIGHT};
+             DLF right_subtree { one * q_id_1 * Subtree_Tag::LEFT};
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(q_swap, working_qubit, transition);
+        }
+
+        { // q_id_1 --w--> ( q_leaf(L), q_leaf(R) )
+             DLF left_subtree  { one * q_leaf * Subtree_Tag::RIGHT};
+             DLF right_subtree { one * q_leaf * Subtree_Tag::LEFT};
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(q_id_1, working_qubit, transition);
+        }
+
+        WTT result = builder.build(number_of_states);
+        return result;
+    }
+
+    if (name == Predefined_WTT_Names::ADDER_MAJ1) {
+        State root   = 0;
+        State q_id   = 1;
+        State q_p1   = 2;  // Project away branch "1"
+        State q_e1   = 3;  // Extract branch "1"
+        State q_leaf = 4;
+
+        u64 number_of_states = 5;
+
+        Internal_Symbol working_qubit = 0;
+        Color color = 0;
+
+        SWTA::Metadata metadata = { .number_of_internal_symbols = 1, .number_of_colors = 1 };
+        WTT_Builder builder (metadata);
+
+        builder.mark_state_initial(root);
+        builder.mark_state_final(q_leaf);
+
+        Def_Coef one  (ACN::ONE());
+        Def_Coef zero (ACN::ZERO());
+
+        { // root --w--> ( q_id(L), q_id(R) )
+             DLF left_subtree  { one * q_id * Subtree_Tag::LEFT };
+             DLF right_subtree { one * q_id * Subtree_Tag::RIGHT };
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(root, working_qubit, transition);
+        }
+
+        { // q_id --w--> ( q_p1(L) + q_e1(R), q_p1(R) + q_e1(L) )
+             DLF left_subtree  { one * q_p1 * Subtree_Tag::LEFT, one * q_e1 * Subtree_Tag::RIGHT };
+             DLF right_subtree { one * q_p1 * Subtree_Tag::RIGHT, one * q_e1 * Subtree_Tag::LEFT };
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(q_id, working_qubit, transition);
+        }
+
+        { // q_p1 --w--> ( q_leaf, 0 q_leaf )
+             DLF left_subtree  { one  * q_leaf * Subtree_Tag::LEFT  };
+             DLF right_subtree { zero * q_leaf * Subtree_Tag::RIGHT };
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(q_p1, working_qubit, transition);
+        }
+
+        { // q_e1 --w--> ( 0 q_leaf, q_leaf )
+             DLF left_subtree  { zero * q_leaf * Subtree_Tag::LEFT  };
+             DLF right_subtree { one  * q_leaf * Subtree_Tag::RIGHT };
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(q_e1, working_qubit, transition);
+        }
+
+        WTT result = builder.build(number_of_states);
+        return result;
+    }
+
+    if (name == Predefined_WTT_Names::ADDER_MAJ_RESULT) {
+        State q_a = 0;
+        State q_b = 1;
+        State q_c = 2;
+        State q_d = 3;
+        State q_e = 4;
+        State q_f = 5;
+        State q_g = 6;
+        State q_h = 7;
+        State q_i = 8;
+        State q_j = 9;
+
+        u64 number_of_states = 10;
+
+        Internal_Symbol working_qubit = 0;
+        Color color = 0;
+
+        SWTA::Metadata metadata = { .number_of_internal_symbols = 1, .number_of_colors = 1 };
+        WTT_Builder builder (metadata);
+
+        builder.mark_state_initial(q_a);
+        builder.mark_state_final(q_j);
+
+        Def_Coef one  (ACN::ONE());
+        Def_Coef zero (ACN::ZERO());
+
+        { // q_a --w--> ( q_b(L) + q_c(R), q_e(L) + q_d(R) )
+             DLF left_subtree  { one * q_b * Subtree_Tag::LEFT, one * q_c * Subtree_Tag::RIGHT };
+             DLF right_subtree { one * q_e * Subtree_Tag::LEFT, one * q_d * Subtree_Tag::RIGHT };
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(q_a, working_qubit, transition);
+        }
+
+        { // q_b --w--> ( q_f(L), q_f(R) )
+             DLF left_subtree  { one * q_f * Subtree_Tag::LEFT };
+             DLF right_subtree { one * q_f * Subtree_Tag::RIGHT };
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(q_b, working_qubit, transition);
+        }
+
+        { // q_c --w--> ( q_h(R), q_h(L) )
+             DLF left_subtree  { one * q_h * Subtree_Tag::RIGHT };
+             DLF right_subtree { one * q_h * Subtree_Tag::LEFT };
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(q_c, working_qubit, transition);
+        }
+
+        { // q_d --w--> ( q_f(L), q_i(R) )
+             DLF left_subtree  { one * q_f * Subtree_Tag::LEFT };
+             DLF right_subtree { one * q_i * Subtree_Tag::RIGHT };
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(q_d, working_qubit, transition);
+        }
+
+        { // q_e --w--> ( q_h(R), q_g(L) )
+             DLF left_subtree  { one * q_h * Subtree_Tag::RIGHT };
+             DLF right_subtree { one * q_g * Subtree_Tag::LEFT };
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(q_e, working_qubit, transition);
+        }
+
+        { // q_f --w--> ( q_j(L), 0 q_j(R) )
+             DLF left_subtree  {  one * q_j * Subtree_Tag::LEFT };
+             DLF right_subtree { zero * q_j * Subtree_Tag::RIGHT };
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(q_f, working_qubit, transition);
+        }
+
+        { // q_g --w--> ( q_j(L), 0 q_j(R) )
+             DLF left_subtree  {  one * q_j * Subtree_Tag::RIGHT };
+             DLF right_subtree { zero * q_j * Subtree_Tag::LEFT };
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(q_g, working_qubit, transition);
+        }
+
+        { // q_h --w--> ( 0 q_j(L), q_j(R) )
+             DLF left_subtree  { zero * q_j * Subtree_Tag::LEFT };
+             DLF right_subtree { one  * q_j * Subtree_Tag::RIGHT };
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(q_h, working_qubit, transition);
+        }
+
+        { // q_i --w--> ( 0 q_j(R), q_j(L) )
+             DLF left_subtree  { zero * q_j * Subtree_Tag::RIGHT };
+             DLF right_subtree { one  * q_j * Subtree_Tag::LEFT  };
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(q_i, working_qubit, transition);
+        }
+
+        WTT result = builder.build(number_of_states);
+        return result;
+    }
+
+    if (name == Predefined_WTT_Names::ADDER_MAJ_RESULT_12) {
+        State q0_a0  = 0;
+        State q1_p0  = 1;
+        State q1_p1  = 2;
+        State p0_p0  = 3;
+        State p1_p1  = 4;
+        State q_leaf = 5;
+
+        u64 number_of_states = 6;
+
+        Internal_Symbol working_qubit = 0;
+        Color color = 0;
+
+        SWTA::Metadata metadata = { .number_of_internal_symbols = 1, .number_of_colors = 1 };
+        WTT_Builder builder (metadata);
+
+        builder.mark_state_initial(q0_a0);
+        builder.mark_state_final(q_leaf);
+
+        Def_Coef one  (ACN::ONE());
+        Def_Coef zero (ACN::ZERO());
+
+        { // q0_a0 --w--> ( q1_p0(L) + q1_p1(R), q1_p0(R) + q1_p1(L) )
+             DLF left_subtree  { one * q1_p0 * Subtree_Tag::LEFT, one * q1_p1 * Subtree_Tag::RIGHT };
+             DLF right_subtree { one * q1_p0 * Subtree_Tag::RIGHT, one * q1_p1 * Subtree_Tag::LEFT };
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(q0_a0, working_qubit, transition);
+        }
+
+        { // q1_p0 --w--> ( p0_p0(L), p0_p0(R) )
+             DLF left_subtree  { one * p0_p0 * Subtree_Tag::LEFT  };
+             DLF right_subtree { one * p0_p0 * Subtree_Tag::RIGHT };
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(q1_p0, working_qubit, transition);
+        }
+
+        { // q1_p1 --w--> ( p0_p0(L), p0_p0(R) )
+             DLF left_subtree  { one * p1_p1 * Subtree_Tag::RIGHT };
+             DLF right_subtree { one * p1_p1 * Subtree_Tag::LEFT  };
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(q1_p1, working_qubit, transition);
+        }
+
+        { // p0_p0 --w--> ( q_leaf(L), 0 q_leaf(R) )
+             DLF left_subtree  {  one * q_leaf * Subtree_Tag::LEFT  };
+             DLF right_subtree { zero * q_leaf * Subtree_Tag::RIGHT };
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(p0_p0, working_qubit, transition);
+        }
+
+        { // p1_p1 --w--> ( q_leaf(L), 0 q_leaf(R) )
+             DLF left_subtree  { zero * q_leaf * Subtree_Tag::LEFT  };
+             DLF right_subtree { one  * q_leaf * Subtree_Tag::RIGHT };
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(p1_p1, working_qubit, transition);
+        }
+
+        WTT result = builder.build(number_of_states);
+        return result;
+    }
+
     throw std::runtime_error("Unknown WTT. " + std::to_string(static_cast<u64>(name)));
 }
 
@@ -1052,6 +1432,74 @@ SWTA get_predefined_swta(Predefined_SWTA_Names name) {
 
         std::vector<State> initial_states ({q_no_one_seen});
         Bit_Set leaf_states (number_of_states, {q_bot, q_leaf});
+        auto transition_fn = builder.build(number_of_states);
+        SWTA result (transition_fn, initial_states, leaf_states);
+
+        return result;
+    }
+
+    if (name == Predefined_SWTA_Names::TEST_ADDER_ALL_3BASIS) {
+        State q3 = 0;
+        State q2 = 1;
+        State q1 = 2;
+        State q0 = 3;
+
+        u64 number_of_states = 4;
+
+        Internal_Symbol working_qubit = 0;
+        Color one_left  = 0;
+        Color one_right = 0;
+
+        SWTA::Metadata metadata = { .number_of_internal_symbols = 1, .number_of_colors = 2 };
+        SWTA::Transition_Builder builder (metadata);
+
+        Def_Coef one  (ACN::ONE());
+        Def_Coef zero (ACN::ZERO());
+
+        { // q3 --one_left--> (q2, 0q2)
+             DLF left_subtree  {one  * q2};
+             DLF right_subtree {zero * q2};
+             auto transition = synthetize_swta_transition(left_subtree, right_subtree);
+             builder.add_transition(q3, working_qubit, one_left, transition);
+        }
+
+        { // q3 --one_right--> (0q2, q2)
+             DLF left_subtree  {zero * q2};
+             DLF right_subtree {one  * q2};
+             auto transition = synthetize_swta_transition(left_subtree, right_subtree);
+             builder.add_transition(q3, working_qubit, one_right, transition);
+        }
+
+        { // q2 --one_left--> (q1, 0q1)
+             DLF left_subtree  {one  * q1};
+             DLF right_subtree {zero * q1};
+             auto transition = synthetize_swta_transition(left_subtree, right_subtree);
+             builder.add_transition(q2, working_qubit, one_left, transition);
+        }
+
+        { // q2 --one_right--> (0q1, q1)
+             DLF left_subtree  {zero * q1};
+             DLF right_subtree {one  * q1};
+             auto transition = synthetize_swta_transition(left_subtree, right_subtree);
+             builder.add_transition(q2, working_qubit, one_right, transition);
+        }
+
+        { // q1 --one_left--> (q0, 0 q0)
+             DLF left_subtree  {one  * q0};
+             DLF right_subtree {zero * q0};
+             auto transition = synthetize_swta_transition(left_subtree, right_subtree);
+             builder.add_transition(q1, working_qubit, one_left, transition);
+        }
+
+        { // q1 --one_right--> (0 q0, q0)
+             DLF left_subtree  {zero * q0};
+             DLF right_subtree {one  * q0};
+             auto transition = synthetize_swta_transition(left_subtree, right_subtree);
+             builder.add_transition(q1, working_qubit, one_right, transition);
+        }
+
+        std::vector<State> initial_states ({q3});
+        Bit_Set leaf_states (number_of_states, { q0 });
         auto transition_fn = builder.build(number_of_states);
         SWTA result (transition_fn, initial_states, leaf_states);
 

@@ -92,13 +92,13 @@ void extend_form_with_product_and_note_discoveries(const Staircase_State& source
                 .second = static_cast<s64>(outer_comp.state),
             };
 
-            if (state.first_nth_qubit == ctx.box_inputs.size()) { // Since qubit number if 0-based, if the equiality hold, we have already exhausted all qubits read by the box
+            if (state.first_nth_qubit > ctx.box_inputs.size()) { // Since qubit number if 0-based, if the equiality hold, we have already exhausted all qubits read by the box
                 assert (ctx.box.states_with_leaf_transitions.get_bit_value(state.first));
                 state.first  = state.second;
                 state.second = -1;
             }
 
-            auto imm_state = ctx.worklist_state.mark_discovery(state);
+            auto imm_state = ctx.mark_discovery(state);
 
             Algebraic_Complex_Number coef = inner_comp.coef * outer_comp.coef;
 
@@ -128,8 +128,8 @@ WTT::Transition calculate_product_of_two_forms(Staircase_Construction_Ctx& ctx, 
     }
 
     { // lr
-        extend_form_with_product_and_note_discoveries(source_state, lr, first_transition.ll, second_transition.lr, ctx);
-        extend_form_with_product_and_note_discoveries(source_state, lr, first_transition.lr, second_transition.rr, ctx);
+        extend_form_with_product_and_note_discoveries(source_state, lr, first_transition.lr, second_transition.ll, ctx);
+        extend_form_with_product_and_note_discoveries(source_state, lr, first_transition.rr, second_transition.lr, ctx);
     }
 
     { // rl
@@ -269,7 +269,7 @@ WTT perform_staircase_construction(WTT& box, const std::vector<Internal_Symbol>&
         }
 
         // We have both of the states being active
-        Internal_Symbol transition_symbol = box_inputs[imm_state->first_nth_qubit];
+        Internal_Symbol transition_symbol = box_inputs[imm_state->second_nth_qubit]; // The first might be in leaf state, which would lead to out-of-bounds access
 
         auto& first_transition  = box.transitions[imm_state->first][transition_symbol];
         auto& second_transition = box.transitions[imm_state->second][transition_symbol];
@@ -277,6 +277,7 @@ WTT perform_staircase_construction(WTT& box, const std::vector<Internal_Symbol>&
         if (!first_transition.is_present() || !second_transition.is_present()) continue;
 
         WTT::Transition transition = calculate_product_of_two_forms(ctx, *imm_state, first_transition, second_transition);
+        std::cout << transition << "\n";
         builder.add_transition(imm_state->handle, transition_symbol, transition);
     }
 

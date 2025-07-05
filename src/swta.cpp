@@ -121,25 +121,21 @@ std::ostream& operator<<(std::ostream& os, const WTT& wtt) {
     return os;
 }
 
-void extend_form_with_product_and_node_discoveries(Linear_Form& destination, const Linear_Form& first, const Linear_Form& second, std::map<State_Pair, u64>& handles, std::vector<State_Pair>& worklist) {
+void extend_form_with_product_and_node_discoveries(Linear_Form& destination, const Linear_Form& first, const Linear_Form& second, Worklist_Construction_Context<State_Pair>& worklist_state) {
     for (auto& outer_comp : second.components) {
         for (auto& inner_comp : first.components) {
 
-            State_Pair state = {.first = inner_comp.state, .second = outer_comp.state, .handle = handles.size()};
-
-            auto [insert_pos, was_inserted] = handles.emplace(state, state.handle);
-
-            if (was_inserted) {
-                worklist.push_back(state);
-            } else {
-                state.handle = insert_pos->second;
+            const State_Pair* imm_state = nullptr;
+            {
+                State_Pair state = { .first = inner_comp.state, .second = outer_comp.state };
+                imm_state = worklist_state.mark_discovery(state);   
             }
 
             Algebraic_Complex_Number coef = inner_comp.coef * outer_comp.coef;
 
             bool already_present = false;
             for (auto& component : destination.components) {
-                if (component.state == state.handle) {
+                if (component.state == imm_state->handle) {
                     component.coef += coef;
                     already_present = true;
                     break;
@@ -150,88 +146,69 @@ void extend_form_with_product_and_node_discoveries(Linear_Form& destination, con
                 continue;  // We are done here
             }
 
-            destination.components.push_back({coef, state.handle});
+            Linear_Form::Component new_component(coef, imm_state->handle);
+            destination.components.push_back(new_component);
         }
     }
 }
 
 
 WTT compose_wtts_sequentially(WTT& first, WTT& second) {
-    std::vector<State_Pair>   worklist;
-
-    std::map<State_Pair, u64>        state_handles;
-    std::vector<State>               initial_states;
-    std::vector<std::map<State, WTT::Transition>> transitions;  // indexed by internal symbols
 
     const u64 num_of_internal_symbols = first.number_of_internal_symbols();
     assert(num_of_internal_symbols == second.number_of_internal_symbols());
-    transitions.resize(num_of_internal_symbols);
 
-    u64 init_state_cnt = first.initial_states.size()*second.initial_states.size();
-    initial_states.reserve(init_state_cnt);
-    for (State state = 0; state < init_state_cnt; state++) {
-        initial_states.push_back(state);
-    }
+    SWTA::Metadata metadata = {.number_of_internal_symbols = num_of_internal_symbols, .number_of_colors = 1};
+    WTT_Builder builder(metadata);
 
-    for (auto first_state : first.initial_states) {
-        for (auto second_state : second.initial_states) {
-            worklist.push_back({first_state, second_state});
+    Worklist_Construction_Context<State_Pair> worklist_state;
 
-            State_Pair pair = {first_state, second_state};
-            state_handles.emplace(pair, state_handles.size());
+    State_Pair initial_state = { .first = first.initial_states[0], .second = second.initial_states[0] };
+    auto imm_initial_state = worklist_state.mark_discovery(initial_state);
+    builder.mark_state_initial(imm_initial_state->handle);
+
+    while (worklist_state.has_more_to_explore()) {
+        auto state_pair = worklist_state.extract();
+
+        auto is_first_leaf  = first.states_with_leaf_transitions.get_bit_value(state_pair->first);
+        auto is_second_leaf = second.states_with_leaf_transitions.get_bit_value(state_pair->second);
+
+        if (is_first_leaf && is_second_leaf) {
+            builder.mark_state_final(state_pair->handle);
         }
-    }
-
-    while (!worklist.empty()) {
-        State_Pair state_pair = worklist.back();
-        worklist.pop_back();
-
-        State handle = state_handles.at(state_pair);
 
         for (Internal_Symbol internal_symbol = 0; internal_symbol < num_of_internal_symbols; internal_symbol++) {
-            WTT::Transition first_transition   = first.transitions[internal_symbol][state_pair.first];
-            WTT::Transition second_transitions = second.transitions[internal_symbol][state_pair.second];
+            WTT::Transition& first_transition   = first.transitions[state_pair->first][internal_symbol];
+            WTT::Transition& second_transitions = second.transitions[state_pair->second][internal_symbol];
 
             Linear_Form ll, lr, rl, rr;
             { // ll
-                extend_form_with_product_and_node_discoveries(ll, first_transition.ll, second_transitions.ll, state_handles, worklist);
-                extend_form_with_product_and_node_discoveries(ll, first_transition.rl, second_transitions.lr, state_handles, worklist);
+                extend_form_with_product_and_node_discoveries(ll, first_transition.ll, second_transitions.ll, worklist_state);
+                extend_form_with_product_and_node_discoveries(ll, first_transition.rl, second_transitions.lr, worklist_state);
             }
 
             { // lr
-                extend_form_with_product_and_node_discoveries(lr, first_transition.ll, second_transitions.lr, state_handles, worklist);
-                extend_form_with_product_and_node_discoveries(lr, first_transition.lr, second_transitions.rr, state_handles, worklist);
+                extend_form_with_product_and_node_discoveries(lr, first_transition.lr, second_transitions.ll, worklist_state);
+                extend_form_with_product_and_node_discoveries(lr, first_transition.rr, second_transitions.lr, worklist_state);
             }
 
             { // rl
-                extend_form_with_product_and_node_discoveries(rl, first_transition.ll, second_transitions.rl, state_handles, worklist);
-                extend_form_with_product_and_node_discoveries(rl, first_transition.rl, second_transitions.rr, state_handles, worklist);
+                extend_form_with_product_and_node_discoveries(rl, first_transition.ll, second_transitions.rl, worklist_state);
+                extend_form_with_product_and_node_discoveries(rl, first_transition.rl, second_transitions.rr, worklist_state);
             }
 
             { // rr
-                extend_form_with_product_and_node_discoveries(rr, first_transition.lr, second_transitions.rl, state_handles, worklist);
-                extend_form_with_product_and_node_discoveries(rr, first_transition.rr, second_transitions.rr, state_handles, worklist);
+                extend_form_with_product_and_node_discoveries(rr, first_transition.lr, second_transitions.rl, worklist_state);
+                extend_form_with_product_and_node_discoveries(rr, first_transition.rr, second_transitions.rr, worklist_state);
             }
 
             WTT::Transition resulting_transition (ll, lr, rl, rr);
-            transitions[internal_symbol].emplace(handle, resulting_transition);
+
+            builder.add_transition(state_pair->handle, internal_symbol, resulting_transition);
         }
     }
 
-    WTT::Transitions resulting_transitions;
-    resulting_transitions.reserve(num_of_internal_symbols);
-
-    for (Internal_Symbol sym = 0; sym < num_of_internal_symbols; sym++) {
-        std::vector<WTT::Transition> transitions_for_sym;
-
-        for (auto& [state, transition] : transitions[sym]) {
-            transitions_for_sym.push_back(transition);
-        }
-
-        resulting_transitions.push_back(transitions_for_sym);
-    }
-
-    WTT result (resulting_transitions, {}, initial_states);
+    WTT result = builder.build(worklist_state.handles.size());
     return result;
 }
 
@@ -454,14 +431,14 @@ void WTT::remove_zeros_from_transitions() {
     }
 }
 
-SWTA::Transition compose_swta_transition_with_wtt(const SWTA::Transition& swta_transition, const WTT::Transition& wtt_transition, std::map<State_Pair, State>& handles, std::vector<State_Pair>& worklist) {
+SWTA::Transition compose_swta_transition_with_wtt(const SWTA::Transition& swta_transition, const WTT::Transition& wtt_transition, Worklist_Construction_Context<State_Pair>& worklist_state) {
     SWTA::Transition result;
 
-    extend_form_with_product_and_node_discoveries(result.left, swta_transition.left, wtt_transition.ll, handles, worklist);
-    extend_form_with_product_and_node_discoveries(result.left, swta_transition.right, wtt_transition.lr, handles, worklist);
+    extend_form_with_product_and_node_discoveries(result.left, swta_transition.left, wtt_transition.ll, worklist_state);
+    extend_form_with_product_and_node_discoveries(result.left, swta_transition.right, wtt_transition.lr, worklist_state);
 
-    extend_form_with_product_and_node_discoveries(result.right, swta_transition.right, wtt_transition.rr, handles, worklist);
-    extend_form_with_product_and_node_discoveries(result.right, swta_transition.left, wtt_transition.rl, handles, worklist);
+    extend_form_with_product_and_node_discoveries(result.right, swta_transition.right, wtt_transition.rr, worklist_state);
+    extend_form_with_product_and_node_discoveries(result.right, swta_transition.left, wtt_transition.rl, worklist_state);
 
     return result;
 }
@@ -476,54 +453,44 @@ std::ostream& operator<<(std::ostream& out, const SWTA::Transition_Builder& buil
 }
 
 SWTA apply_wtt_to_swta(const SWTA& swta, const WTT& wtt) {
-    std::vector<State_Pair> worklist; // (SWTA state, WTT state)
-
-    std::map<State_Pair, State> handles;
+    Worklist_Construction_Context<State_Pair> worklist_state;
 
     Bit_Set leaf_states (0);
     std::vector<State> initial_states;
     SWTA::Transition_Builder transition_builder ( swta.get_metadata() );
 
 
-    for (auto swta_state : swta.initial_states) {
-        for (auto wtt_state : wtt.initial_states) {
-            State_Pair product_state = { .first = swta_state, .second = wtt_state, .handle = handles.size() };
+    State_Pair initial_state = { .first = swta.initial_states[0], .second = wtt.initial_states[0] };
+    auto imm_initial_state = worklist_state.mark_discovery(initial_state);
+    initial_states.push_back(imm_initial_state->handle);
+   
+    while (worklist_state.has_more_to_explore()) {
+        auto product_state = worklist_state.extract();
 
-            initial_states.push_back(product_state.handle);
-
-            worklist.push_back(product_state);
-            handles.emplace(product_state, product_state.handle);
-        }
-    }
-
-    while (!worklist.empty()) {
-        auto product_state = worklist.back();
-        worklist.pop_back();
-
-        bool is_swta_state_leaf = swta.states_with_leaf_transitions.get_bit_value(product_state.first);
-        bool is_wtt_state_leaf  = wtt.states_with_leaf_transitions.get_bit_value(product_state.second);
+        bool is_swta_state_leaf = swta.states_with_leaf_transitions.get_bit_value(product_state->first);
+        bool is_wtt_state_leaf  = wtt.states_with_leaf_transitions.get_bit_value(product_state->second);
 
         if (is_swta_state_leaf && is_wtt_state_leaf) {
-            leaf_states.grow_and_set_bit(product_state.handle);
+            leaf_states.grow_and_set_bit(product_state->handle);
         }
 
         for (Internal_Symbol sym = 0; sym < swta.number_of_internal_symbols(); sym++) {
-            const auto& wtt_transition = wtt.transitions[product_state.second][sym];
+            const auto& wtt_transition = wtt.transitions[product_state->second][sym];
 
             for (Color color = 0; color < swta.number_of_colors(); color++) {
-                const auto& swta_transition = swta.transitions[product_state.first][sym][color];
+                const auto& swta_transition = swta.transitions[product_state->first][sym][color];
 
                 if (!swta_transition.is_present()) continue;
                 if (!wtt_transition.is_present())  continue;
 
-                auto result_form = compose_swta_transition_with_wtt(swta_transition, wtt_transition, handles, worklist);
-                transition_builder.add_transition(product_state.handle, sym, color, result_form);
+                auto result_form = compose_swta_transition_with_wtt(swta_transition, wtt_transition, worklist_state);
+                transition_builder.add_transition(product_state->handle, sym, color, result_form);
             }
         }
 
     }
 
-    auto transition_fn = transition_builder.build(handles.size());
+    auto transition_fn = transition_builder.build(worklist_state.handles.size());
     SWTA result (transition_fn, initial_states, leaf_states);
     return result;
 }

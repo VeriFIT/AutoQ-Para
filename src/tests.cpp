@@ -567,6 +567,48 @@ TEST_CASE("Staircase composition of identities") {
     Internal_Symbol terminating_symbol = 2; // Working qubit = 0, ancilla = 1
     u64 offset = 2;
     WTT result = perform_staircase_construction(box, {0, 1, 0}, offset, terminating_symbol);
+}
 
-    std::cout << result << "\n";
+TEST_CASE("ADDER Compose the UMA gate") {
+    SWTA::Metadata metadata = {
+        .number_of_internal_symbols = 1,
+        .number_of_colors = 1,
+    };
+    WTT uma1 = get_predefined_wtt(Predefined_WTT_Names::ADDER_UMA1, metadata);
+    WTT uma2 = get_predefined_wtt(Predefined_WTT_Names::ADDER_UMA2, metadata);
+    WTT uma3 = get_predefined_wtt(Predefined_WTT_Names::ADDER_UMA3, metadata);
+
+    auto uma12  = compose_wtts_sequentially(uma1,  uma2);
+    auto uma123 = compose_wtts_sequentially(uma12, uma3);
+
+    std::cout << uma123 << "\n";
+}
+
+TEST_CASE("ADDER Compose the MAJ gate") {
+    SWTA::Metadata metadata = {
+        .number_of_internal_symbols = 1,
+        .number_of_colors = 2,
+    };
+    WTT maj1 = get_predefined_wtt(Predefined_WTT_Names::ADDER_MAJ1, metadata);
+    WTT maj2 = get_predefined_wtt(Predefined_WTT_Names::ADDER_MAJ2, metadata);
+    WTT maj3 = get_predefined_wtt(Predefined_WTT_Names::ADDER_MAJ3, metadata);
+
+    auto maj12  = compose_wtts_sequentially(maj1, maj2);
+    auto maj123 = compose_wtts_sequentially(maj12, maj3);
+
+    WTT handwritten_maj = get_predefined_wtt(Predefined_WTT_Names::ADDER_MAJ_RESULT, metadata);
+
+    SWTA all_basis = get_predefined_swta(Predefined_SWTA_Names::TEST_ADDER_ALL_3BASIS);
+
+    SWTA result_automatic = apply_wtt_to_swta(all_basis, maj123);
+    SWTA result_handwritten = apply_wtt_to_swta(all_basis, handwritten_maj);
+
+    bool are_equivalent = are_two_swtas_color_equivalent(
+        result_automatic,
+        result_handwritten
+    );
+    REQUIRE(are_equivalent);
+
+
+    auto r = perform_staircase_construction(handwritten_maj, {0, 0, 0}, 2, 1);
 }

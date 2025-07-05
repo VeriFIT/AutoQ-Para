@@ -202,6 +202,10 @@ struct State_Pair {
             return false;
         return this->second < other.second;
     }
+
+    bool operator==(const State_Pair& other) const {
+        return first == other.first && second == other.second;
+    }
 };
 
 std::ostream& operator<<(std::ostream& os, const State_Pair& state);

@@ -17,6 +17,15 @@ enum class Predefined_WTT_Names : u64 {
     GROVER_FIRST_MULTI_Z_USING_CCX  = 12,
     GROVER_SECOND_MULTI_Z_USING_CCX = 13,
 
+    ADDER_UMA1 = 20,
+    ADDER_UMA2 = 21,
+    ADDER_UMA3 = 22,
+    ADDER_UMA_RESULT = 23, // Undefined
+    ADDER_MAJ1 = 24,
+    ADDER_MAJ2 = 21, // same as ADDER_UMA2
+    ADDER_MAJ3 = 20, // same as ADDER_UMA1
+    ADDER_MAJ_RESULT = 30,
+    ADDER_MAJ_RESULT_12 = 31, // composition of the first and the second stage
 };
 
 enum class Predefined_SWTA_Names : u64 {
@@ -30,7 +39,10 @@ enum class Predefined_SWTA_Names : u64 {
     TEST_BV_EXAMPLE_AFTER_STEP2 = 6,
     TEST_BV_EXAMPLE_AFTER_STEP3 = 7,
 
+    
     GROVER_ALL_BASIS = 8,
+
+    TEST_ADDER_ALL_3BASIS = 10,
 };
 
 struct Def_State;
