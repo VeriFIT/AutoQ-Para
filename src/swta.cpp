@@ -128,7 +128,7 @@ void extend_form_with_product_and_node_discoveries(Linear_Form& destination, con
             const State_Pair* imm_state = nullptr;
             {
                 State_Pair state = { .first = inner_comp.state, .second = outer_comp.state };
-                imm_state = worklist_state.mark_discovery(state);   
+                imm_state = worklist_state.mark_discovery(state);
             }
 
             Algebraic_Complex_Number coef = inner_comp.coef * outer_comp.coef;
@@ -463,7 +463,7 @@ SWTA apply_wtt_to_swta(const SWTA& swta, const WTT& wtt) {
     State_Pair initial_state = { .first = swta.initial_states[0], .second = wtt.initial_states[0] };
     auto imm_initial_state = worklist_state.mark_discovery(initial_state);
     initial_states.push_back(imm_initial_state->handle);
-   
+
     while (worklist_state.has_more_to_explore()) {
         auto product_state = worklist_state.extract();
 
@@ -1283,4 +1283,80 @@ Color_Symbol_Abstraction build_color_internal_symbol_abstraction(const SWTA& swt
     };
 
     return result;
+}
+
+void write_wtt_transition_with_debug_data(std::ostream& os, const WTT::Transition& transition, const WTT::Debug_Data* debug_data) {
+    auto write_norm_with_debug_info = [&debug_data](std::ostream& target, const Linear_Form& form, const char* subtree_info, bool needs_leading_plus) {
+        if (needs_leading_plus) {
+            target << " + ";
+        }
+
+        for (u64 i = 0; i < form.size(); i++) {
+            auto& component = form.components[i];
+            std::string state_name = debug_data->state_names.contains(component.state) ? debug_data->state_names.at(component.state) : "q" + std::to_string(component.state);
+
+            if (component.coef.is_integer()) {
+                s64 value = mpz_get_si(component.coef.a);
+                target << value << "*" << state_name << subtree_info;
+            } else {
+                target << component.coef << "*" << state_name << subtree_info;
+            }
+
+            if (i < form.size() - 1) target << " + ";
+        }
+    };
+
+
+    os << "LEFT SUBTREE: ";
+    bool needs_plus = false; // True, if anything has been written to the output stream
+    if (!transition.ll.empty()) {
+        write_norm_with_debug_info(os, transition.ll, "(L)", needs_plus);
+        needs_plus = true;
+    }
+
+    if (!transition.lr.empty()) {
+        write_norm_with_debug_info(os, transition.lr, "(R)", needs_plus);
+        needs_plus = true;
+    }
+
+    if (transition.ll.empty() && transition.lr.empty()) {
+        os << "0";
+    }
+
+    os << "; RIGHT SUBTREE: ";
+    needs_plus = false; // Reset
+
+    if (!transition.rl.empty()) {
+        write_norm_with_debug_info(os, transition.rl, "(L)", needs_plus);
+        needs_plus = true;
+    }
+
+    if (!transition.rr.empty()) {
+        write_norm_with_debug_info(os, transition.rr, "(R)", needs_plus);
+        needs_plus = true;
+    }
+
+    if (transition.rl.empty() && transition.rr.empty()) {
+        os << "0";
+    }
+}
+
+void write_wtt_with_debug_data(std::ostream& os, const WTT& wtt) {
+    os << "WTT {\n";
+    os << "  initial states: " << wtt.initial_states << "\n";
+
+    for (u64 state = 0; state < wtt.number_of_states(); state++) {
+        std::string state_name = wtt.debug_data->state_names.contains(state) ? wtt.debug_data->state_names.at(state) : "q" + std::to_string(state);
+
+        const std::vector<WTT::Transition>& transitions_from_state = wtt.transitions[state];
+        for (Internal_Symbol sym = 0; sym < wtt.number_of_internal_symbols(); sym++) {
+            auto& transition = transitions_from_state[sym];
+            if (!transition.is_present()) continue;
+            os << "  " << state_name << "--(sym=" << sym << ")-->: ";
+            write_wtt_transition_with_debug_data(os, transitions_from_state[sym], wtt.debug_data);
+            os << "\n";
+        }
+    }
+
+    os << "}";
 }

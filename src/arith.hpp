@@ -2,7 +2,6 @@
 
 #include <cassert>
 #include <cmath>
-#include <cstdint>
 #include <gmp-x86_64.h>
 #include <iostream>
 #include <ostream>
@@ -274,6 +273,13 @@ struct Algebraic_Complex_Number {
                (mpz_cmp_ui(this->b, 0) == 0) &&
                (mpz_cmp_ui(this->c, 0) == 0) &&
                (mpz_cmp_ui(this->d, 0) == 0);
+    }
+
+    bool is_integer() const {
+        return (mpz_cmp_ui(this->b, 0) == 0) &&
+               (mpz_cmp_ui(this->c, 0) == 0) &&
+               (mpz_cmp_ui(this->d, 0) == 0) &&
+               (mpz_cmp_ui(this->k, 0) == 0);
     }
 
     void swap(Algebraic_Complex_Number& other) noexcept {

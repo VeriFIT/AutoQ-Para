@@ -956,6 +956,21 @@ WTT get_predefined_wtt(Predefined_WTT_Names name, const SWTA::Metadata& swta_met
         }
 
         WTT result = builder.build(number_of_states);
+
+        do_on_debug({
+             result.debug_data = new WTT::Debug_Data();
+             result.debug_data->state_names[q_a] = "A";
+             result.debug_data->state_names[q_b] = "B";
+             result.debug_data->state_names[q_c] = "C";
+             result.debug_data->state_names[q_d] = "D";
+             result.debug_data->state_names[q_e] = "E";
+             result.debug_data->state_names[q_f] = "F";
+             result.debug_data->state_names[q_g] = "G";
+             result.debug_data->state_names[q_h] = "H";
+             result.debug_data->state_names[q_i] = "I";
+             result.debug_data->state_names[q_j] = "J";
+        });
+
         return result;
     }
 

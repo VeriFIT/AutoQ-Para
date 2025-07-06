@@ -92,11 +92,11 @@ void extend_form_with_product_and_note_discoveries(const Staircase_State& source
                 .second = static_cast<s64>(outer_comp.state),
             };
 
-            if (state.first_nth_qubit > ctx.box_inputs.size()) { // Since qubit number if 0-based, if the equiality hold, we have already exhausted all qubits read by the box
-                assert (ctx.box.states_with_leaf_transitions.get_bit_value(state.first));
-                state.first  = state.second;
-                state.second = -1;
-            }
+            // if (state.first_nth_qubit == ctx.box_inputs.size()) { // The first state is a leaf state
+            //     assert (ctx.box.states_with_leaf_transitions.get_bit_value(state.first));
+            //     state.first  = state.second;
+            //     state.second = -1;
+            // }
 
             auto imm_state = ctx.mark_discovery(state);
 
@@ -161,7 +161,7 @@ void pad_linear_form_with_ids(Staircase_Construction_Ctx& ctx, Padder padder, Li
 }
 
 template <typename Padder>
-WTT::Transition pad_transition_using_padder(Staircase_Construction_Ctx& ctx, WTT::Transition& transition_to_pad, const Staircase_State* source_state, Padder padder) {
+WTT::Transition pad_transition_using_padder(Staircase_Construction_Ctx& ctx, WTT::Transition& transition_to_pad, Padder padder) {
     Linear_Form ll, lr, rl, rr;
     pad_linear_form_with_ids(ctx, padder, ll, transition_to_pad.ll);
     pad_linear_form_with_ids(ctx, padder, lr, transition_to_pad.lr);
@@ -170,9 +170,9 @@ WTT::Transition pad_transition_using_padder(Staircase_Construction_Ctx& ctx, WTT
     return WTT::Transition(ll, lr, rl, rr);
 }
 
-WTT::Transition pad_transition_with_ids_right(Staircase_Construction_Ctx& ctx, WTT::Transition& transition_to_pad, const Staircase_State* source_state) {
-    auto right_padder = [&ctx, &source_state](State present_state) {
-        u64 nth_qubit_result_will_read = source_state->first_nth_qubit + 1;
+WTT::Transition pad_transition_with_ids_right(Staircase_Construction_Ctx& ctx, WTT::Transition& transition_to_pad, const Staircase_State* source_state, u64 active_src_component_nth_qubit) {
+    auto right_padder = [&ctx, &source_state, &active_src_component_nth_qubit](State present_state) {
+        u64 nth_qubit_result_will_read = active_src_component_nth_qubit + 1;
 
         s64 pad_value = -1;
         if (nth_qubit_result_will_read == ctx.box_offset) { // We can start the next box, so instead of padding with -1, we put there the initial state of the box
@@ -194,7 +194,7 @@ WTT::Transition pad_transition_with_ids_right(Staircase_Construction_Ctx& ctx, W
 
         return padded_state;
     };
-    auto result = pad_transition_using_padder(ctx, transition_to_pad, source_state, right_padder);
+    auto result = pad_transition_using_padder(ctx, transition_to_pad, right_padder);
     return result;
 }
 
@@ -248,15 +248,14 @@ WTT perform_staircase_construction(WTT& box, const std::vector<Internal_Symbol>&
         std::cout << "Exploring " << *imm_state << " :: "<< imm_state->handle << "\n";
 
         if (imm_state->second < 0) {
-
             if (imm_state->first < 0 || ctx.box.states_with_leaf_transitions.get_bit_value(imm_state->first)) {
                 builder.mark_state_final(imm_state->handle);
-                continue;;
+                continue;
             }
 
             Internal_Symbol transition_symbol = box_inputs[imm_state->first_nth_qubit];
             auto& first_transition = box.transitions[imm_state->first][transition_symbol];
-            WTT::Transition padded_transition = pad_transition_with_ids_right(ctx, first_transition, imm_state);
+            WTT::Transition padded_transition = pad_transition_with_ids_right(ctx, first_transition, imm_state, imm_state->first_nth_qubit);
 
             bool did_restart_happen =  (imm_state->first_nth_qubit + 1 == ctx.box_offset);
             if (did_restart_happen) {
@@ -274,19 +273,51 @@ WTT perform_staircase_construction(WTT& box, const std::vector<Internal_Symbol>&
         auto& first_transition  = box.transitions[imm_state->first][transition_symbol];
         auto& second_transition = box.transitions[imm_state->second][transition_symbol];
 
-        if (!first_transition.is_present() || !second_transition.is_present()) continue;
+        if (!first_transition.is_present() && !second_transition.is_present()) {
+            continue;
+        }
+
+        if (!first_transition.is_present()) {
+            auto transition = pad_transition_with_ids_right(ctx, second_transition, imm_state, imm_state->second_nth_qubit);
+
+            bool did_restart_happen =  (imm_state->second_nth_qubit + 1 == ctx.box_offset);
+            if (did_restart_happen) {
+                auto unrestarted_transition = craft_unrestarted_transition(ctx, transition);
+                builder.add_transition(imm_state->handle, ctx.terminating_symbol, unrestarted_transition);
+            }
+
+            builder.add_transition(imm_state->handle, transition_symbol, transition);
+            continue;
+        }
 
         WTT::Transition transition = calculate_product_of_two_forms(ctx, *imm_state, first_transition, second_transition);
-        std::cout << transition << "\n";
         builder.add_transition(imm_state->handle, transition_symbol, transition);
     }
 
     WTT result = builder.build(ctx.states_by_handle.size());
 
     do_on_debug({
-       for (auto& [state, handle] : ctx.worklist_state.handles) {
-           std::cout << state << " = " << handle << "\n";
-       }
+        result.debug_data = new WTT::Debug_Data();
+        auto& state_names = result.debug_data->state_names;
+
+        auto namer = [&ctx](State state) {
+            if (ctx.box.debug_data == nullptr) {
+                return std::to_string(state);
+            }
+
+            auto& state_names = ctx.box.debug_data->state_names;
+            if (state_names.contains(state)) {
+                return state_names.at(state);
+            }
+
+            if (state == -1) return std::string("ID");
+
+            return std::to_string(state);
+        };
+
+        for (auto& [state, handle] : ctx.worklist_state.handles) {
+            state_names[handle] = "(" + namer(state.first) + ", " + namer(state.second) + ", h=" + std::to_string(handle) + ")";
+        }
     });
 
     return result;

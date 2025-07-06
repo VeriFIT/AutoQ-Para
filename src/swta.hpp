@@ -265,6 +265,12 @@ struct WTT {
         }
     };
 
+    struct Debug_Data {
+        std::map<State, std::string> state_names;
+    };
+
+    Debug_Data* debug_data = nullptr;
+
     using Transitions = std::vector<std::vector<Transition>>;
 
     /**
@@ -297,6 +303,53 @@ struct WTT {
 
     WTT(const Transitions& transitions, Bit_Set& leaf_states, const std::vector<State>& initial_states) : transitions(transitions), states_with_leaf_transitions(leaf_states), initial_states(initial_states) {};
 
+    WTT(const WTT& other) : transitions(other.transitions), initial_states(other.initial_states), states_with_leaf_transitions(other.states_with_leaf_transitions) {
+        if (other.debug_data != nullptr) {
+            Debug_Data* debug_data_copy = new Debug_Data(*other.debug_data);
+            this->debug_data = debug_data_copy;
+        }
+    }
+
+    WTT(WTT&& other) : transitions(other.transitions), initial_states(other.initial_states), states_with_leaf_transitions(other.states_with_leaf_transitions) {
+        this->debug_data = other.debug_data;
+        other.debug_data = nullptr;
+    }
+
+    WTT& operator=(WTT&& other) {
+        this->transitions = other.transitions;
+        this->initial_states = other.initial_states;
+        this->states_with_leaf_transitions = other.states_with_leaf_transitions;
+
+        if (this->debug_data != nullptr) {
+            delete this->debug_data;
+        }
+
+        this->debug_data = other.debug_data;
+        other.debug_data = nullptr;
+
+        return *this;
+    }
+
+    WTT& operator=(const WTT& other) {
+        this->transitions = other.transitions;
+        this->initial_states = other.initial_states;
+        this->states_with_leaf_transitions = other.states_with_leaf_transitions;
+
+        if (this->debug_data != nullptr) {
+            delete this->debug_data;
+        }
+
+        this->debug_data = new Debug_Data(*other.debug_data);
+
+        this->debug_data = other.debug_data;
+
+        return *this;
+    }
+
+    ~WTT() {
+        if (this->debug_data != nullptr) delete this->debug_data;
+    }
+
     size_t number_of_states() const {
         return transitions.size();
     }
@@ -328,6 +381,7 @@ struct WTT {
 
 std::ostream& operator<<(std::ostream& os, const WTT::Transition& wtt_transition);
 std::ostream& operator<<(std::ostream& os, const WTT& wtt);
+void write_wtt_with_debug_data(std::ostream& os, const WTT& wtt);
 
 
 struct WTT_Builder {
