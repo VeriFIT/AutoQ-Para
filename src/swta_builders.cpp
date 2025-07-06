@@ -51,8 +51,9 @@ struct Staircase_Construction_Ctx {
     u64 box_offset;
     u64 terminating_symbol;
     std::vector<const Staircase_State*> states_by_handle;
+    Staircase_Direction direction;
 
-    Staircase_Construction_Ctx(WTT& box, const std::vector<Internal_Symbol>& inputs, u64 box_offset, u64 term_symbol) : box(box), box_inputs(inputs), box_offset(box_offset), terminating_symbol(term_symbol) {}
+    Staircase_Construction_Ctx(WTT& box, const std::vector<Internal_Symbol>& inputs, u64 box_offset, u64 term_symbol, Staircase_Direction direction) : box(box), box_inputs(inputs), box_offset(box_offset), terminating_symbol(term_symbol), direction(direction) {}
 
     const Staircase_State* mark_discovery(Staircase_State& state) {
         u64 size_before_insert = this->worklist_state.handles.size();
@@ -81,16 +82,23 @@ u64 count_different_symbols_in_box_inputs(const std::vector<Internal_Symbol>& in
     return bit_set.popcount();
 }
 
-void extend_form_with_product_and_note_discoveries(const Staircase_State& source_state, Linear_Form& destination, const Linear_Form& first, const Linear_Form& second, Staircase_Construction_Ctx& ctx) {
-    for (auto& outer_comp : second.components) {
-        for (auto& inner_comp : first.components) {
+void extend_form_with_product_and_note_discoveries(const Staircase_State& source_state, Linear_Form& destination, const Linear_Form& first_state_form, const Linear_Form& second_state_form, Staircase_Construction_Ctx& ctx) {
+    const Linear_Form* first_applied_form  = &first_state_form;
+    const Linear_Form* second_applied_form = &second_state_form;
+
+    for (auto& first_form_component : first_applied_form->components) {
+        for (auto& second_form_component : second_applied_form->components) {
 
             Staircase_State state = {
                 .first_nth_qubit  = source_state.first_nth_qubit + 1, // The product state will read the (n+1)-th qubit
                 .second_nth_qubit = source_state.second_nth_qubit + 1,
-                .first  = static_cast<s64>(inner_comp.state),
-                .second = static_cast<s64>(outer_comp.state),
+                .first  = static_cast<s64>(first_form_component.state),
+                .second = static_cast<s64>(second_form_component.state),
             };
+
+            if (ctx.direction == Staircase_Direction::RIGHT_LEFT) {
+                std::swap(state.first, state.second);
+            }
 
             // if (state.first_nth_qubit == ctx.box_inputs.size()) { // The first state is a leaf state
             //     assert (ctx.box.states_with_leaf_transitions.get_bit_value(state.first));
@@ -100,7 +108,7 @@ void extend_form_with_product_and_note_discoveries(const Staircase_State& source
 
             auto imm_state = ctx.mark_discovery(state);
 
-            Algebraic_Complex_Number coef = inner_comp.coef * outer_comp.coef;
+            Algebraic_Complex_Number coef = second_form_component.coef * first_form_component.coef;
 
             bool already_present = false;
             for (auto& component : destination.components) {
@@ -121,25 +129,32 @@ void extend_form_with_product_and_note_discoveries(const Staircase_State& source
 }
 
 WTT::Transition calculate_product_of_two_forms(Staircase_Construction_Ctx& ctx, const Staircase_State& source_state, const WTT::Transition& first_transition, const WTT::Transition& second_transition) {
+    const WTT::Transition* first_applied_transition  = &first_transition;
+    const WTT::Transition* second_applied_transition = &second_transition;
+
+    if (ctx.direction == Staircase_Direction::RIGHT_LEFT) {
+       std::swap(first_applied_transition, second_applied_transition);
+    }
+
     Linear_Form ll, lr, rl, rr;
     { // ll
-        extend_form_with_product_and_note_discoveries(source_state, ll, first_transition.ll, second_transition.ll, ctx);
-        extend_form_with_product_and_note_discoveries(source_state, ll, first_transition.rl, second_transition.lr, ctx);
+        extend_form_with_product_and_note_discoveries(source_state, ll, first_applied_transition->ll, second_applied_transition->ll, ctx);
+        extend_form_with_product_and_note_discoveries(source_state, ll, first_applied_transition->rl, second_applied_transition->lr, ctx);
     }
 
     { // lr
-        extend_form_with_product_and_note_discoveries(source_state, lr, first_transition.lr, second_transition.ll, ctx);
-        extend_form_with_product_and_note_discoveries(source_state, lr, first_transition.rr, second_transition.lr, ctx);
+        extend_form_with_product_and_note_discoveries(source_state, lr, first_applied_transition->lr, second_applied_transition->ll, ctx);
+        extend_form_with_product_and_note_discoveries(source_state, lr, first_applied_transition->rr, second_applied_transition->lr, ctx);
     }
 
     { // rl
-        extend_form_with_product_and_note_discoveries(source_state, rl, first_transition.ll, second_transition.rl, ctx);
-        extend_form_with_product_and_note_discoveries(source_state, rl, first_transition.rl, second_transition.rr, ctx);
+        extend_form_with_product_and_note_discoveries(source_state, rl, first_applied_transition->ll, second_applied_transition->rl, ctx);
+        extend_form_with_product_and_note_discoveries(source_state, rl, first_applied_transition->rl, second_applied_transition->rr, ctx);
     }
 
     { // rr
-        extend_form_with_product_and_note_discoveries(source_state, rr, first_transition.lr, second_transition.rl, ctx);
-        extend_form_with_product_and_note_discoveries(source_state, rr, first_transition.rr, second_transition.rr, ctx);
+        extend_form_with_product_and_note_discoveries(source_state, rr, first_applied_transition->lr, second_applied_transition->rl, ctx);
+        extend_form_with_product_and_note_discoveries(source_state, rr, first_applied_transition->rr, second_applied_transition->rr, ctx);
     }
     WTT::Transition result (ll, lr, rl, rr);
     return result;
@@ -228,7 +243,7 @@ WTT::Transition craft_unrestarted_transition(Staircase_Construction_Ctx& ctx, WT
 }
 
 
-WTT perform_staircase_construction(WTT& box, const std::vector<Internal_Symbol>& box_inputs, u64 box_offset, u64 terminating_symbol) {
+WTT perform_staircase_construction(WTT& box, const std::vector<Internal_Symbol>& box_inputs, u64 box_offset, u64 terminating_symbol, Staircase_Direction direction) {
     // Check whether the overlap is sufficiently small for products to be 2 tuples
     assert (box_inputs.size() <= 2*box_offset);
 
@@ -236,7 +251,7 @@ WTT perform_staircase_construction(WTT& box, const std::vector<Internal_Symbol>&
     SWTA::Metadata metadata = { .number_of_internal_symbols = number_of_internal_symbols, .number_of_colors = 0 };
     WTT_Builder builder (metadata);
 
-    Staircase_Construction_Ctx ctx(box, box_inputs, box_offset, terminating_symbol);
+    Staircase_Construction_Ctx ctx(box, box_inputs, box_offset, terminating_symbol, direction);
 
     Staircase_State initial_state = { .first_nth_qubit = 0, .first = static_cast<s64>(box.initial_states[0]), .second = -1, };
     auto imm_initial_state = ctx.mark_discovery(initial_state);
@@ -245,7 +260,9 @@ WTT perform_staircase_construction(WTT& box, const std::vector<Internal_Symbol>&
     while (ctx.worklist_state.has_more_to_explore()) {
         auto imm_state = ctx.worklist_state.extract();
 
-        std::cout << "Exploring " << *imm_state << " :: "<< imm_state->handle << "\n";
+        do_on_debug({
+            std::cout << "Exploring " << *imm_state << " :: "<< imm_state->handle << "\n";
+        });
 
         if (imm_state->second < 0) {
             if (imm_state->first < 0 || ctx.box.states_with_leaf_transitions.get_bit_value(imm_state->first)) {

@@ -609,6 +609,6 @@ TEST_CASE("ADDER Compose the MAJ gate") {
     );
     REQUIRE(are_equivalent);
 
-    auto r = perform_staircase_construction(handwritten_maj, {0, 0, 0}, 2, 1);
+    auto r = perform_staircase_construction(handwritten_maj, {0, 0, 0}, 2, 1, Staircase_Direction::LEFT_RIGHT);
     write_wtt_with_debug_data(std::cout, r);
 }

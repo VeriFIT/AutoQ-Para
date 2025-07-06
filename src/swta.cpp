@@ -1345,6 +1345,7 @@ void write_wtt_with_debug_data(std::ostream& os, const WTT& wtt) {
     os << "WTT {\n";
     os << "  initial states: " << wtt.initial_states << "\n";
 
+    u64 transition_cnt = 0;
     for (u64 state = 0; state < wtt.number_of_states(); state++) {
         std::string state_name = wtt.debug_data->state_names.contains(state) ? wtt.debug_data->state_names.at(state) : "q" + std::to_string(state);
 
@@ -1355,8 +1356,11 @@ void write_wtt_with_debug_data(std::ostream& os, const WTT& wtt) {
             os << "  " << state_name << "--(sym=" << sym << ")-->: ";
             write_wtt_transition_with_debug_data(os, transitions_from_state[sym], wtt.debug_data);
             os << "\n";
+            transition_cnt += 1;
         }
     }
+
+    std::cout << "  ... " << transition_cnt << " transitions total.\n";
 
     os << "}";
 }
