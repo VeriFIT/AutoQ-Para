@@ -1364,3 +1364,59 @@ void write_wtt_with_debug_data(std::ostream& os, const WTT& wtt) {
 
     os << "}";
 }
+
+WTT compose_wtts_horizontally(const WTT& first, const WTT& second) {
+    WTT result(first);
+
+    Bit_Set original_leaves (first.states_with_leaf_transitions);
+
+    auto redirect_leaves_to_initial_state = [&first, &second](Linear_Form& form, u64 state_offset) {
+        for (auto& component : form.components) {
+            if (first.states_with_leaf_transitions.get_bit_value(component.state)) {
+                component.state = second.initial_states[0] + state_offset;
+            }
+        }
+    };
+
+    u64 state_offset = first.number_of_states();
+
+    auto offset_states_in_form = [](Linear_Form& form, u64 offset) {
+        for (auto& component : form.components) {
+            component.state += offset;
+        }
+    };
+
+    for (auto& transitions_from_state : result.transitions) {
+        for (auto& transition : transitions_from_state) {
+            redirect_leaves_to_initial_state(transition.ll, state_offset);
+            redirect_leaves_to_initial_state(transition.lr, state_offset);
+            redirect_leaves_to_initial_state(transition.rl, state_offset);
+            redirect_leaves_to_initial_state(transition.rr, state_offset);
+        }
+    }
+
+    result.states_with_leaf_transitions.clear();
+    result.states_with_leaf_transitions.grow(first.number_of_states() + second.number_of_states());
+
+    for (State second_state = 0; second_state < second.number_of_states(); second_state++) {
+        result.transitions.push_back({});
+        result.transitions[state_offset + second_state].resize(second.number_of_internal_symbols());
+
+        for (Internal_Symbol internal_symbol = 0; internal_symbol < second.number_of_internal_symbols(); internal_symbol++) {
+            auto transition = second.transitions[second_state][internal_symbol];
+
+            offset_states_in_form(transition.ll, state_offset);
+            offset_states_in_form(transition.lr, state_offset);
+            offset_states_in_form(transition.rl, state_offset);
+            offset_states_in_form(transition.rr, state_offset);
+
+            result.transitions[second_state + state_offset][internal_symbol] = transition;
+        }
+
+        if (second.states_with_leaf_transitions.get_bit_value(second_state)) {
+            result.states_with_leaf_transitions.set_bit(second_state + state_offset);
+        }
+    }
+
+    return result;
+}

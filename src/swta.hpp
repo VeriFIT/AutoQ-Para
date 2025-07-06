@@ -681,3 +681,5 @@ Affine_Program<Branch_Selector> build_affine_program(const SWTA& swta, const Col
 Color_Symbol_Abstraction build_color_internal_symbol_abstraction(const SWTA& swta);
 
 SWTA apply_wtt_to_swta(const SWTA& swta, const WTT& wtt);
+
+WTT compose_wtts_horizontally(const WTT& first, const WTT& second);

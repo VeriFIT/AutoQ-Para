@@ -608,7 +608,32 @@ TEST_CASE("ADDER Compose the MAJ gate") {
         result_handwritten
     );
     REQUIRE(are_equivalent);
+}
 
-    auto r = perform_staircase_construction(handwritten_maj, {0, 0, 0}, 2, 1, Staircase_Direction::LEFT_RIGHT);
-    write_wtt_with_debug_data(std::cout, r);
+TEST_CASE("Verify adder circuit") {
+    SWTA::Metadata metadata = { .number_of_internal_symbols = 1, .number_of_colors = 1};
+
+    WTT maj = get_predefined_wtt(Predefined_WTT_Names::ADDER_MAJ_RESULT, metadata);
+
+    WTT uma1 = get_predefined_wtt(Predefined_WTT_Names::ADDER_UMA1, metadata);
+    WTT uma2 = get_predefined_wtt(Predefined_WTT_Names::ADDER_UMA1, metadata);
+    WTT uma3 = get_predefined_wtt(Predefined_WTT_Names::ADDER_UMA1, metadata);
+
+    WTT uma12  = compose_wtts_sequentially(uma1, uma2);
+    WTT uma123 = compose_wtts_sequentially(uma12, uma3);
+
+    std::vector<u64> box_inputs {0, 0, 0};
+    u64 box_offset = 2;
+    u64 new_symbol = 1;
+
+    WTT maj_staircase = perform_staircase_construction(maj, box_inputs, box_offset, new_symbol, Staircase_Direction::LEFT_RIGHT);
+    WTT uma_staircase = perform_staircase_construction(maj, box_inputs, box_offset, new_symbol, Staircase_Direction::RIGHT_LEFT);
+
+    WTT id1 = get_predefined_wtt(Predefined_WTT_Names::TEST_FIXED_ID1, metadata);
+    WTT extended_maj_staircase = compose_wtts_horizontally(maj_staircase, id1);
+    WTT extended_uma_staircase = compose_wtts_horizontally(uma_staircase, id1);
+
+    WTT middle_piece = get_predefined_wtt(Predefined_WTT_Names::ADDER_MIDDLE, metadata);
+
+    auto result = compose_wtts_horizontally(id1, id1);
 }

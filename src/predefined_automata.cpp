@@ -1035,6 +1035,102 @@ WTT get_predefined_wtt(Predefined_WTT_Names name, const SWTA::Metadata& swta_met
         return result;
     }
 
+    if (name == Predefined_WTT_Names::ADDER_MIDDLE) {
+        State q_wait   = 0;
+        State q_idle1  = 1;
+        State q_decide = 2;
+        State q_swap   = 3;
+        State q_noswap = 4;
+        State q_leaf   = 5;
+
+        u64 number_of_states = 6;
+
+        Internal_Symbol working_qubit = 0;
+        Internal_Symbol alt_working_qubit = 1;
+        Color color = 0;
+
+        SWTA::Metadata metadata = { .number_of_internal_symbols = 2, .number_of_colors = 1 };
+        WTT_Builder builder (metadata);
+
+        builder.mark_state_initial(q_wait);
+        builder.mark_state_final(q_leaf);
+
+        Def_Coef one  (ACN::ONE());
+
+        { // q_wait --w--> ( q_wait(L), q_wait(R) )
+             DLF left_subtree  { one * q_wait * Subtree_Tag::LEFT  };
+             DLF right_subtree { one * q_wait * Subtree_Tag::RIGHT };
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(q_wait, working_qubit, transition);
+        }
+
+        { // q_wait --W'--> ( q_idle1(L), q_idle1(R) )
+             DLF left_subtree  { one * q_idle1 * Subtree_Tag::LEFT  };
+             DLF right_subtree { one * q_idle1 * Subtree_Tag::RIGHT };
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(q_wait, working_qubit, transition);
+        }
+
+        { // q_idle1 --w--> ( q_decide(L), q_decide(R) )
+             DLF left_subtree  { one * q_decide * Subtree_Tag::LEFT  };
+             DLF right_subtree { one * q_decide * Subtree_Tag::RIGHT };
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(q_idle1, working_qubit, transition);
+        }
+
+        { // q_decide --w--> ( q_noswap(L), q_swap(R) )
+             DLF left_subtree  { one * q_noswap * Subtree_Tag::LEFT  };
+             DLF right_subtree { one * q_swap   * Subtree_Tag::RIGHT };
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(q_decide, working_qubit, transition);
+        }
+
+        { // q_no_swap --w--> ( q_leaf(L), q_leaf(R) )
+             DLF left_subtree  { one * q_leaf * Subtree_Tag::LEFT  };
+             DLF right_subtree { one * q_leaf * Subtree_Tag::RIGHT };
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(q_noswap, working_qubit, transition);
+        }
+
+        { // q_swap --w--> ( q_leaf(R), q_leaf(L) )
+             DLF left_subtree  { one * q_leaf * Subtree_Tag::RIGHT };
+             DLF right_subtree { one * q_leaf * Subtree_Tag::LEFT  };
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(q_swap, working_qubit, transition);
+        }
+
+        WTT result = builder.build(number_of_states);
+        return result;
+    }
+
+    if (name == Predefined_WTT_Names::TEST_FIXED_ID1) {
+        State q_root = 0;
+        State q_leaf = 1;
+
+        u64 number_of_states = 2;
+
+        Internal_Symbol working_qubit = 0;
+        Color color = 0;
+
+        SWTA::Metadata metadata = { .number_of_internal_symbols = 1, .number_of_colors = 1 };
+        WTT_Builder builder (metadata);
+
+        builder.mark_state_initial(q_root);
+        builder.mark_state_final(q_leaf);
+
+        Def_Coef one  (ACN::ONE());
+
+        { // q_wait --w--> ( q_leaf(L), q_leaf(R) )
+             DLF left_subtree  { one * q_leaf * Subtree_Tag::LEFT  };
+             DLF right_subtree { one * q_leaf * Subtree_Tag::RIGHT };
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(q_root, working_qubit, transition);
+        }
+
+        WTT result = builder.build(number_of_states);
+        return result;
+    }
+
     throw std::runtime_error("Unknown WTT. " + std::to_string(static_cast<u64>(name)));
 }
 
