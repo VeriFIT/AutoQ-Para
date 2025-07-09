@@ -243,6 +243,8 @@ bool are_two_complete_dfas_equivalent(const NFA& first_nfa, NFA& second_nfa) {
 
         if (is_final_in_first != is_final_in_second) {
             if (DEBUG) {
+                std::cout << "First  accepts? " << is_final_in_first << "\n";
+                std::cout << "Second accepts? " << is_final_in_second << "\n";
                 print_diseq_witness(context, current_pair->handle);
             }
             return false;

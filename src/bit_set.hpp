@@ -146,7 +146,7 @@ struct Bit_Set {
 
 
         u64 spilled_contents = this->data[chunks_to_compare] & other.data[chunks_to_compare];
-        spilled_contents = spilled_contents & ~((~0) << spilled_size); // Extract only the relevant bits
+        spilled_contents = spilled_contents & ~((~static_cast<u64>(0)) << spilled_size); // Extract only the relevant bits
 
         return spilled_contents == 0; // The result of and is 0, meaning that the intersection is empty
     }

@@ -28,6 +28,8 @@ enum class Predefined_WTT_Names : u64 {
     ADDER_MAJ_RESULT_12 = 31, // composition of the first and the second stage
     ADDER_MIDDLE = 32,
 
+    ECC_BOX1 = 40,
+    ECC_BOX2 = 41,
 
     TEST_FIXED_ID1 = 100
 };
@@ -49,6 +51,9 @@ enum class Predefined_SWTA_Names : u64 {
     TEST_ADDER_ALL_3BASIS = 10,
     ADDER_PRE        = 11,
     ADDER_POST       = 12,
+
+    ECC_PRE        = 20,
+    ECC_POST       = 21,
 };
 
 struct Def_State;

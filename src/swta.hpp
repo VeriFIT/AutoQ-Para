@@ -732,4 +732,4 @@ SWTA apply_wtt_to_swta(const SWTA& swta, const WTT& wtt);
 
 WTT compose_wtts_horizontally(const WTT& first, const WTT& second);
 
-std::vector<Algebraic_Complex_Number> evaluate_wtt_on_tree(WTT& wtt, State root, std::vector<Algebraic_Complex_Number>& tree, const std::vector<u32>& internal_symbols, u32 sym_idx);
+std::vector<Algebraic_Complex_Number> evaluate_wtt_on_tree(const WTT& wtt, State root, const std::vector<Algebraic_Complex_Number>& tree, const std::vector<u32>& internal_symbols, u32 sym_idx);

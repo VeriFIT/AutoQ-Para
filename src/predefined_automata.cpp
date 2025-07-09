@@ -1148,6 +1148,118 @@ WTT get_predefined_wtt(Predefined_WTT_Names name, const SWTA::Metadata& swta_met
         return result;
     }
 
+    if (name == Predefined_WTT_Names::ECC_BOX1) {
+        State q_read_decision = 0;
+        State q_no_swap_0     = 1;
+        State q_no_swap_1     = 2;
+        State q_no_swap_2     = 3;
+        State q_swap_0        = 4;
+        State q_swap_1        = 5;
+        State q_swap_2        = 6;
+        State q_leaf          = 7;
+
+        u64 number_of_states = 8;
+
+        Internal_Symbol working_qubit = 0;
+
+        SWTA::Metadata metadata = { .number_of_internal_symbols = 1, .number_of_colors = 1 };
+        WTT_Builder builder (metadata);
+
+        builder.mark_state_initial(q_read_decision);
+        builder.mark_state_final(q_leaf);
+
+        Def_Coef one  (ACN::ONE());
+
+        auto add_transition = [&builder, &one, &working_qubit](State source, State left_target, Subtree_Tag left_tag, State right_target, Subtree_Tag right_tag) {
+             DLF left_subtree  { one*left_target*left_tag };
+             DLF right_subtree { one*right_target*right_tag };
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(source, working_qubit, transition);
+        };
+
+        add_transition(q_read_decision, q_no_swap_0, Subtree_Tag::LEFT, q_swap_0, Subtree_Tag::RIGHT);
+
+        add_transition(q_no_swap_0, q_no_swap_1, Subtree_Tag::LEFT, q_no_swap_1, Subtree_Tag::RIGHT);
+        add_transition(q_no_swap_1, q_no_swap_2, Subtree_Tag::LEFT, q_no_swap_2, Subtree_Tag::RIGHT);
+        add_transition(q_no_swap_2, q_leaf, Subtree_Tag::LEFT, q_leaf, Subtree_Tag::RIGHT);
+
+        add_transition(q_swap_0, q_swap_1, Subtree_Tag::LEFT, q_swap_1, Subtree_Tag::RIGHT);
+        add_transition(q_swap_1, q_swap_2, Subtree_Tag::LEFT, q_swap_2, Subtree_Tag::RIGHT);
+        add_transition(q_swap_2, q_leaf, Subtree_Tag::RIGHT, q_leaf, Subtree_Tag::LEFT);
+
+        WTT result = builder.build(number_of_states);
+
+        if (DEBUG) {
+            result.debug_data = new WTT::Debug_Data;
+            auto& state_names = result.debug_data->state_names;
+
+            state_names[q_read_decision] = "decide";
+            state_names[q_no_swap_0]     = "no_swp0";
+            state_names[q_no_swap_1]     = "no_swp1";
+            state_names[q_no_swap_2]     = "no_swp2";
+            state_names[q_swap_0]        = "swp0";
+            state_names[q_swap_1]        = "swp1";
+            state_names[q_swap_2]        = "swp2";
+            state_names[q_leaf]          = "leaf";
+        }
+
+        return result;
+     }
+
+     if (name == Predefined_WTT_Names::ECC_BOX2) {
+        State q_idle0   = 0;
+        State q_idle1   = 1;
+        State q_decide  = 2;
+        State q_no_swap = 3;
+        State q_swap    = 4;
+        State q_leaf    = 5;
+
+        u64 number_of_states = 6;
+
+        Internal_Symbol working_qubit = 0;
+
+        SWTA::Metadata metadata = { .number_of_internal_symbols = 1, .number_of_colors = 1 };
+        WTT_Builder builder (metadata);
+
+        builder.mark_state_initial(q_idle0);
+        builder.mark_state_final(q_leaf);
+
+        Def_Coef one  (ACN::ONE());
+
+        auto add_transition = [&builder, &one, &working_qubit](State source, State left_target, Subtree_Tag left_tag, State right_target, Subtree_Tag right_tag) {
+             DLF left_subtree  { one*left_target*left_tag };
+             DLF right_subtree { one*right_target*right_tag };
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(source, working_qubit, transition);
+        };
+
+        add_transition(q_idle0, q_idle1, Subtree_Tag::LEFT, q_idle1, Subtree_Tag::RIGHT);
+
+        add_transition(q_idle1, q_decide, Subtree_Tag::LEFT, q_decide, Subtree_Tag::RIGHT);
+        add_transition(q_decide, q_no_swap, Subtree_Tag::LEFT, q_swap, Subtree_Tag::RIGHT);
+
+        add_transition(q_swap, q_leaf, Subtree_Tag::RIGHT, q_leaf, Subtree_Tag::LEFT);
+        add_transition(q_no_swap, q_leaf, Subtree_Tag::LEFT, q_leaf, Subtree_Tag::RIGHT);
+
+        WTT result = builder.build(number_of_states);
+
+        if (DEBUG) {
+            result.debug_data = new WTT::Debug_Data;
+            auto& state_names = result.debug_data->state_names;
+
+            state_names[q_idle0]   = "idle0";
+            state_names[q_idle1]   = "idle1";
+            state_names[q_decide]  = "decide";
+            state_names[q_no_swap] = "no_swp";
+            state_names[q_swap]    = "swp";
+            state_names[q_leaf]    = "leaf";
+        }
+
+        return result;
+
+     }
+
+
     throw std::runtime_error("Unknown WTT. " + std::to_string(static_cast<u64>(name)));
 }
 
@@ -2003,6 +2115,231 @@ SWTA get_predefined_swta(Predefined_SWTA_Names name) {
             state_names[c]    = "C";
             state_names[leaf] = "leaf";
 
+        });
+
+        return result;
+    }
+
+    if (name == Predefined_SWTA_Names::ECC_PRE) {
+        State init        =  0;
+        State q_w_init    =  1;
+        State q_anc_init  =  2;
+        State q_w         =  3;
+        State q_anc       =  4;
+        State s_w_init    =  5;
+        State s_anc_init  =  6;
+        State s_w         =  7;
+        State s_anc       =  8;
+
+        u64 number_of_states = 9;
+
+        Internal_Symbol working_qubit      = 0;
+        Internal_Symbol working_qubit_stop = 1;
+
+        Color color_LL = 0;
+        Color color_LR = 1;
+        Color color_RL = 2;
+        Color color_RR = 3;
+
+        SWTA::Metadata metadata = { .number_of_internal_symbols = 2, .number_of_colors = 4 };
+        SWTA::Transition_Builder builder (metadata);
+
+        Def_Coef one  (ACN::ONE());
+        Def_Coef zero (ACN::ZERO());
+
+        auto add_transition = [&builder, &working_qubit](State source, Color color, const Def_Linear_Form& left_successor, const Def_Linear_Form& right_successor) {
+             DLF left_subtree  { left_successor };
+             DLF right_subtree { right_successor };
+             auto transition = synthetize_swta_transition(left_subtree, right_subtree);
+             builder.add_transition(source, working_qubit, color, transition);
+        };
+
+        auto add_stop_transition = [&builder, &working_qubit_stop](State source, Color color, const Def_Linear_Form& left_successor, const Def_Linear_Form& right_successor) {
+             DLF left_subtree  { left_successor };
+             DLF right_subtree { right_successor };
+             auto transition = synthetize_swta_transition(left_subtree, right_subtree);
+             builder.add_transition(source, working_qubit_stop, color, transition);
+        };
+
+        add_transition(init, color_LL, one*q_anc_init, one*s_anc_init);
+
+        add_transition(q_anc_init, color_LL, one*q_w_init, zero*q_w_init); // Ancillas are initialized to zero
+        add_transition(s_anc_init, color_LL, one*s_w_init, zero*s_w_init);
+
+        add_transition(q_w_init, color_LL, one*q_anc, zero*q_anc);
+        add_transition(q_w_init, color_LR, one*q_anc, zero*q_anc);
+        add_transition(q_w_init, color_RL, zero*q_anc, one*q_anc);
+        add_transition(q_w_init, color_RR, zero*q_anc, one*q_anc);
+
+        add_transition(s_w_init, color_LL, one*s_anc, zero*s_anc);
+        add_transition(s_w_init, color_LR, zero*s_anc, one*s_anc);
+        add_transition(s_w_init, color_RL, one*s_anc, zero*s_anc);
+        add_transition(s_w_init, color_RR, zero*s_anc, one*s_anc);
+
+        add_transition(q_anc, color_LL, one*q_w, zero*q_w);
+        add_transition(s_anc, color_LL, one*s_w, zero*s_w);
+
+        add_transition(q_w, color_LL, one*q_anc, zero*q_anc);
+        add_transition(q_w, color_LR, one*q_anc, zero*q_anc);
+        add_transition(q_w, color_RL, zero*q_anc, one*q_anc);
+        add_transition(q_w, color_RR, zero*q_anc, one*q_anc);
+
+        add_transition(s_w, color_LL, one*s_anc, zero*s_anc);
+        add_transition(s_w, color_LR, zero*s_anc, one*s_anc);
+        add_transition(s_w, color_RL, one*s_anc, zero*s_anc);
+        add_transition(s_w, color_RR, zero*s_anc, one*s_anc);
+
+        add_stop_transition(q_anc_init, color_LL, one*q_w_init, zero*q_w_init);
+        add_stop_transition(s_anc_init, color_LL, one*s_w_init, zero*s_w_init);
+
+        add_stop_transition(q_anc, color_LL, one*q_w, zero*q_w);
+        add_stop_transition(s_anc, color_LL, one*s_w, zero*s_w);
+
+        std::vector<State> initial_states ({init});
+        Bit_Set leaf_states (number_of_states, { q_w, s_w });
+        auto transition_fn = builder.build(number_of_states);
+        SWTA result (transition_fn, initial_states, leaf_states);
+
+        do_on_debug({
+            result.debug_data = new SWTA::Debug_Data();
+            auto& state_names = result.debug_data->state_names;
+
+            state_names[init]       = "init";
+            state_names[q_w_init]   = "q_w_init";
+            state_names[q_anc_init] = "q_anc_init";
+            state_names[q_w]        = "q_w";
+            state_names[q_anc]      = "q_anc";
+            state_names[s_w_init]   = "s_w_init";
+            state_names[s_anc_init] = "s_anc_init";
+            state_names[s_w]        = "s_w";
+            state_names[s_anc]      = "s_anc";
+        });
+
+        return result;
+    }
+
+    if (name == Predefined_SWTA_Names::ECC_POST) {
+        State init_state    =  0;
+
+        State q_00_w        =  1;
+        State q_00_anc      =  2;
+        State q_10_w        =  3;
+        State q_10_anc      =  4;
+        State q_11_anc      =  5;
+        State q_01_anc      =  6;
+        State q_01_anc_init =  7;
+        State q_00_anc_init =  8;
+        State q_00_w_init   =  9;
+        State q_10_w_init   = 10;
+
+        State s_00_w        = 11;
+        State s_00_anc      = 12;
+        State s_10_w        = 13;
+        State s_10_anc      = 14;
+        State s_11_anc      = 15;
+        State s_01_anc      = 16;
+        State s_01_anc_init = 17;
+        State s_00_anc_init = 18;
+        State s_00_w_init   = 19;
+        State s_10_w_init   = 20;
+
+        u64 number_of_states = 21;
+
+        Internal_Symbol working_qubit = 0;
+
+        Color color_LL = 0;
+        Color color_LR = 1;
+        Color color_RL = 2;
+        Color color_RR = 3;
+
+        SWTA::Metadata metadata = { .number_of_internal_symbols = 1, .number_of_colors = 4 };
+        SWTA::Transition_Builder builder (metadata);
+
+        Def_Coef one  (ACN::ONE());
+        Def_Coef zero (ACN::ZERO());
+
+        auto add_transition = [&builder, &working_qubit](State source, Color color, const Def_Linear_Form& left_successor, const Def_Linear_Form& right_successor) {
+             DLF left_subtree  { left_successor };
+             DLF right_subtree { right_successor };
+             auto transition = synthetize_swta_transition(left_subtree, right_subtree);
+             builder.add_transition(source, working_qubit, color, transition);
+        };
+
+        // Init state
+        add_transition(init_state, color_LL, one*q_00_anc_init, one*s_01_anc_init);
+
+        add_transition(q_00_anc_init, color_LL, one*q_00_w_init, zero*q_00_w_init);
+        add_transition(q_01_anc_init, color_LL, one*q_10_w_init, zero*q_00_w_init);
+
+        add_transition(s_00_anc_init, color_LL, one*s_00_w_init, zero*s_00_w_init);
+        add_transition(s_01_anc_init, color_LL, one*s_10_w_init, zero*s_00_w_init);
+
+        add_transition(q_00_w_init, color_LL, one*q_00_anc, zero*q_11_anc);
+        add_transition(q_00_w_init, color_LR, one*q_00_anc, zero*q_11_anc);
+        add_transition(q_00_w_init, color_RL, zero*q_00_anc, one*q_11_anc);
+        add_transition(q_00_w_init, color_RR, zero*q_00_anc, one*q_11_anc);
+        add_transition(q_10_w_init, color_LL, one*q_10_anc, zero*q_01_anc);
+        add_transition(q_10_w_init, color_LR, one*q_10_anc, zero*q_01_anc);
+        add_transition(q_10_w_init, color_RL, zero*q_10_anc, one*q_01_anc);
+        add_transition(q_10_w_init, color_RR, zero*q_10_anc, one*q_01_anc);
+
+        add_transition(s_00_w_init, color_LL, one*s_00_anc,  zero*s_11_anc);
+        add_transition(s_00_w_init, color_LR, zero*s_00_anc, one*s_11_anc);
+        add_transition(s_00_w_init, color_RL, one*s_00_anc,  zero*s_11_anc);
+        add_transition(s_00_w_init, color_RR, zero*s_00_anc, one*s_11_anc);
+        add_transition(s_10_w_init, color_LL, one*s_10_anc, zero*s_01_anc);
+        add_transition(s_10_w_init, color_LR, zero*s_10_anc, one*s_01_anc);
+        add_transition(s_10_w_init, color_RL, one*s_10_anc, zero*s_01_anc);
+        add_transition(s_10_w_init, color_RR, zero*s_10_anc, one*s_01_anc);
+
+        add_transition(q_00_w, color_LL, one*q_00_anc, zero*q_11_anc);
+        add_transition(q_00_w, color_LR, one*q_00_anc, zero*q_11_anc);
+        add_transition(q_00_w, color_RL, zero*q_00_anc, one*q_11_anc);
+        add_transition(q_00_w, color_RR, zero*q_00_anc, one*q_11_anc);
+        add_transition(q_10_w, color_LL, one*q_10_anc, zero*q_01_anc);
+        add_transition(q_10_w, color_LR, one*q_10_anc, zero*q_01_anc);
+        add_transition(q_10_w, color_RL, zero*q_10_anc, one*q_01_anc);
+        add_transition(q_10_w, color_RR, zero*q_10_anc, one*q_01_anc);
+
+        add_transition(s_00_w, color_LL, one*s_00_anc, zero*s_11_anc);
+        add_transition(s_00_w, color_LR, zero*s_00_anc, one*s_11_anc);
+        add_transition(s_00_w, color_RL, one*s_00_anc, zero*s_11_anc);
+        add_transition(s_00_w, color_RR, zero*s_00_anc, one*s_11_anc);
+        add_transition(s_10_w, color_LL, one*s_10_anc, zero*s_01_anc);
+        add_transition(s_10_w, color_LR, zero*s_10_anc, one*s_01_anc);
+        add_transition(s_10_w, color_RL, one*s_10_anc, zero*s_01_anc);
+        add_transition(s_10_w, color_RR, zero*s_10_anc, one*s_01_anc);
+
+        add_transition(q_00_anc, color_LL,  one*q_00_w, zero*q_00_w);
+        add_transition(q_01_anc, color_LL,  one*q_10_w, zero*q_10_w);
+        add_transition(q_10_anc, color_LL, zero*q_00_w,  one*q_00_w);
+        add_transition(q_11_anc, color_LL, zero*q_10_w,  one*q_10_w);
+
+        add_transition(s_00_anc, color_LL,  one*s_00_w, zero*s_00_w);
+        add_transition(s_01_anc, color_LL,  one*s_10_w, zero*s_10_w);
+        add_transition(s_10_anc, color_LL, zero*s_00_w,  one*s_00_w);
+        add_transition(s_11_anc, color_LL, zero*s_10_w,  one*s_10_w);
+
+        std::vector<State> initial_states ({init_state});
+        Bit_Set leaf_states (number_of_states, { q_00_w, q_10_w, s_00_w, s_10_w }); // We have both 00 and 10 states here, becasue the last qubit can affect only the last ancilla
+        auto transition_fn = builder.build(number_of_states);
+        SWTA result (transition_fn, initial_states, leaf_states);
+
+        do_on_debug({
+            result.debug_data = new SWTA::Debug_Data();
+            auto& state_names = result.debug_data->state_names;
+
+            state_names[init_state]    = "init";
+            state_names[q_00_w]        = "q_00_w";
+            state_names[q_00_anc]      = "q_00_anc";
+            state_names[q_10_w]        = "q_10_w";
+            state_names[q_10_anc]      = "q_10_anc";
+            state_names[q_11_anc]      = "q_11_anc";
+            state_names[q_01_anc]      = "q_01_anc";
+            state_names[q_01_anc_init] = "q_01_anc_init";
+            state_names[q_00_anc_init] = "q_00_anc_init";
+            state_names[q_00_w_init]   = "q_00_w_init";
+            state_names[q_10_w_init]   = "q_10_w_init";
         });
 
         return result;

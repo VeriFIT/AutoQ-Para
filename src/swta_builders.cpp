@@ -85,9 +85,11 @@ u64 count_different_symbols_in_box_inputs(const std::vector<Internal_Symbol>& in
     return bit_set.popcount();
 }
 
-void extend_form_with_product_and_note_discoveries(const Staircase_State& source_state, Linear_Form& destination, const Linear_Form& first_state_form, const Linear_Form& second_state_form, Staircase_Construction_Ctx& ctx) {
+bool extend_form_with_product_and_note_discoveries(const Staircase_State& source_state, Linear_Form& destination, const Linear_Form& first_state_form, const Linear_Form& second_state_form, Staircase_Construction_Ctx& ctx) {
     const Linear_Form* first_applied_form  = &first_state_form;
     const Linear_Form* second_applied_form = &second_state_form;
+
+    bool did_restart_happen = false;
 
     for (auto& first_form_component : first_applied_form->components) {
         for (auto& second_form_component : second_applied_form->components) {
@@ -103,6 +105,19 @@ void extend_form_with_product_and_note_discoveries(const Staircase_State& source
                 std::swap(state.first, state.second);
             }
 
+            // It might be that post is (Leaf, State) and due to the offset, we should be already starting a new instance in place of the Leaf
+            bool is_first_leaf = state.first_nth_qubit == ctx.box_inputs.size(); 
+            bool should_we_start_new_instance_right_away = (state.second_nth_qubit == ctx.box_offset); 
+            if (is_first_leaf && should_we_start_new_instance_right_away) {
+                state.first = state.second;
+                state.first_nth_qubit = state.second_nth_qubit;
+
+                state.second = ctx.box.initial_states[0];
+                state.second_nth_qubit = 0;
+
+                did_restart_happen = true;
+            }
+            
             // if (state.first_nth_qubit == ctx.box_inputs.size()) { // The first state is a leaf state
             //     assert (ctx.box.states_with_leaf_transitions.get_bit_value(state.first));
             //     state.first  = state.second;
@@ -129,9 +144,11 @@ void extend_form_with_product_and_note_discoveries(const Staircase_State& source
             destination.components.push_back({coef, imm_state->handle});
         }
     }
+
+    return did_restart_happen;
 }
 
-WTT::Transition calculate_product_of_two_forms(Staircase_Construction_Ctx& ctx, const Staircase_State& source_state, const WTT::Transition& first_transition, const WTT::Transition& second_transition) {
+std::pair<WTT::Transition, bool> calculate_product_of_two_forms(Staircase_Construction_Ctx& ctx, const Staircase_State& source_state, const WTT::Transition& first_transition, const WTT::Transition& second_transition) {
     const WTT::Transition* first_applied_transition  = &first_transition;
     const WTT::Transition* second_applied_transition = &second_transition;
 
@@ -139,28 +156,32 @@ WTT::Transition calculate_product_of_two_forms(Staircase_Construction_Ctx& ctx, 
        std::swap(first_applied_transition, second_applied_transition);
     }
 
+    bool did_restart_happen = false;
+
     Linear_Form ll, lr, rl, rr;
     { // ll
-        extend_form_with_product_and_note_discoveries(source_state, ll, first_applied_transition->ll, second_applied_transition->ll, ctx);
-        extend_form_with_product_and_note_discoveries(source_state, ll, first_applied_transition->rl, second_applied_transition->lr, ctx);
+        did_restart_happen |= extend_form_with_product_and_note_discoveries(source_state, ll, first_applied_transition->ll, second_applied_transition->ll, ctx);
+        did_restart_happen |= extend_form_with_product_and_note_discoveries(source_state, ll, first_applied_transition->rl, second_applied_transition->lr, ctx);
     }
 
     { // lr
-        extend_form_with_product_and_note_discoveries(source_state, lr, first_applied_transition->lr, second_applied_transition->ll, ctx);
-        extend_form_with_product_and_note_discoveries(source_state, lr, first_applied_transition->rr, second_applied_transition->lr, ctx);
+        did_restart_happen |= extend_form_with_product_and_note_discoveries(source_state, lr, first_applied_transition->lr, second_applied_transition->ll, ctx);
+        did_restart_happen |= extend_form_with_product_and_note_discoveries(source_state, lr, first_applied_transition->rr, second_applied_transition->lr, ctx);
     }
 
     { // rl
-        extend_form_with_product_and_note_discoveries(source_state, rl, first_applied_transition->ll, second_applied_transition->rl, ctx);
-        extend_form_with_product_and_note_discoveries(source_state, rl, first_applied_transition->rl, second_applied_transition->rr, ctx);
+        did_restart_happen |= extend_form_with_product_and_note_discoveries(source_state, rl, first_applied_transition->ll, second_applied_transition->rl, ctx);
+        did_restart_happen |= extend_form_with_product_and_note_discoveries(source_state, rl, first_applied_transition->rl, second_applied_transition->rr, ctx);
     }
 
     { // rr
-        extend_form_with_product_and_note_discoveries(source_state, rr, first_applied_transition->lr, second_applied_transition->rl, ctx);
-        extend_form_with_product_and_note_discoveries(source_state, rr, first_applied_transition->rr, second_applied_transition->rr, ctx);
+        did_restart_happen |= extend_form_with_product_and_note_discoveries(source_state, rr, first_applied_transition->lr, second_applied_transition->rl, ctx);
+        did_restart_happen |= extend_form_with_product_and_note_discoveries(source_state, rr, first_applied_transition->rr, second_applied_transition->rr, ctx);
     }
+
     WTT::Transition result (ll, lr, rl, rr);
-    return result;
+
+    return std::make_pair(result, did_restart_happen);
 }
 
 template <typename Padder>
@@ -208,6 +229,7 @@ WTT::Transition pad_transition_with_ids_right(Staircase_Construction_Ctx& ctx, W
             std::cout << "From state: " << *source_state << " on "
                       << nth_qubit_result_will_read << "-th qubit we active the second component, producing a state: "
                       << padded_state << "\n";
+            std::cout << "The post state will read: " << padded_state.first_nth_qubit << " and " << padded_state.second_nth_qubit << " qubits.\n";
         }
 
         return padded_state;
@@ -312,8 +334,13 @@ WTT perform_staircase_construction(WTT& box, const std::vector<Internal_Symbol>&
             continue;
         }
 
-        WTT::Transition transition = calculate_product_of_two_forms(ctx, *imm_state, first_transition, second_transition);
+        auto [transition, did_restart_happen] = calculate_product_of_two_forms(ctx, *imm_state, first_transition, second_transition);
         builder.add_transition(imm_state->handle, transition_symbol, transition);
+
+        if (did_restart_happen) {
+            auto unrestared_transition = craft_unrestarted_transition(ctx, transition);
+            builder.add_transition(imm_state->handle, ctx.terminating_symbol, unrestared_transition);
+        }
     }
 
     WTT result = builder.build(ctx.states_by_handle.size());

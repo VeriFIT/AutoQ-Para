@@ -6,6 +6,7 @@
 #include "swta_builders.hpp"
 #include "weighted_automata.hpp"
 #include "predefined_automata.hpp"
+#include <vector>
 
 #define CATCH_CONFIG_MAIN
 
@@ -652,18 +653,198 @@ TEST_CASE("Verify adder circuit") {
 
     bool are_two_swtas_equivalent = are_two_swtas_color_equivalent(result_swta, postcondition);
     std::cout << "Are equivalent: " << are_two_swtas_equivalent << "\n";
-
-    // 0 1 0 0
-     std::vector<u64> ints = {
-         0, 0, 0, 0, 0, 0, 0, 0,
-         0, 0, 0, 0, 1, 0, 0, 0,
-     };
-     std::vector<Algebraic_Complex_Number> nums;
-     for (auto i : ints) {
-         nums.push_back(Algebraic_Complex_Number(i, 0, 0, 0, 0));
-     }
-
-     std::cout << evaluate_wtt_on_tree(adder_circuit, 0, nums, {0, 1, 0, 0}, 0);
-
 }
 
+
+std::vector<Algebraic_Complex_Number> convert_ints_into_acns(const std::vector<s64>& ints) {
+    std::vector<Algebraic_Complex_Number> acns;
+    for (auto i : ints) {
+        acns.push_back(Algebraic_Complex_Number(i, 0, 0, 0, 0));
+    }
+
+    return acns;
+}
+
+std::vector<Algebraic_Complex_Number> construct_tree_for_quantum_state(const std::vector<s64>& state) {
+    std::vector<s64> tree;
+    u64 tree_leaf_cnt = static_cast<u64>(1u) << state.size();
+    tree.resize(tree_leaf_cnt);
+
+    u64 idx = state.size() - 1;
+    u64 result = 0;
+    for (auto val : state) {
+        result += val << static_cast<u64>(idx);
+        idx -= 1;
+    }
+
+    tree[result] = 1;
+
+    auto acn_tree = convert_ints_into_acns(tree);
+    return acn_tree;
+}
+
+std::vector<s64> extract_basis_from_tree(const std::vector<Algebraic_Complex_Number>& tree) {
+    s64 nonzero_idx = 0;
+    bool found = false;
+    for (; nonzero_idx < tree.size(); nonzero_idx++) {
+        if (!tree[nonzero_idx].is_zero()) {
+            found = true;
+            break;
+        }
+    }
+
+    assert (found);
+
+
+    std::vector<s64> basis;
+
+    int basis_size = 0;
+    u64 size = tree.size();
+    while (size >>= 1) basis_size += 1;
+
+    basis.resize(basis_size);
+
+    s64 basis_idx = basis_size - 1;
+    while (basis_idx >= 0) {
+        if (nonzero_idx & 0x1) basis[basis_idx] = 1;
+        nonzero_idx >>= 1;
+        basis_idx -= 1;
+    }
+
+    return basis;
+}
+
+void check_wtt_evaluation(const WTT& wtt, const std::vector<s64>& in_basis, const std::vector<u32>& internal_symbols, const std::vector<s64>& out_basis) {
+    auto tree = construct_tree_for_quantum_state(in_basis);
+    auto result = evaluate_wtt_on_tree(wtt, 0, tree, internal_symbols, 0);
+    auto result_basis = extract_basis_from_tree(result);
+    REQUIRE(result_basis == out_basis);
+}
+
+TEST_CASE("Try ECC BOX 1 component definition") {
+    SWTA::Metadata metadata = { .number_of_internal_symbols = 1, .number_of_colors = 1 };
+    auto box = get_predefined_wtt(Predefined_WTT_Names::ECC_BOX1, metadata);
+
+    std::vector<u32> syms = {0, 0, 0, 0};
+    check_wtt_evaluation(box, {0, 0, 0, 0}, syms, {0, 0, 0, 0});
+    check_wtt_evaluation(box, {0, 0, 0, 1}, syms, {0, 0, 0, 1});
+    check_wtt_evaluation(box, {0, 0, 1, 0}, syms, {0, 0, 1, 0});
+    check_wtt_evaluation(box, {1, 0, 0, 0}, syms, {1, 0, 0, 1});
+}
+
+TEST_CASE("Try ECC BOX 2 component definition") {
+    SWTA::Metadata metadata = { .number_of_internal_symbols = 1, .number_of_colors = 1 };
+    auto box = get_predefined_wtt(Predefined_WTT_Names::ECC_BOX2, metadata);
+
+    std::vector<u32> syms = {0, 0, 0, 0};
+    check_wtt_evaluation(box, {0, 0, 0, 0}, syms, {0, 0, 0, 0});
+    check_wtt_evaluation(box, {0, 0, 0, 1}, syms, {0, 0, 0, 1});
+    check_wtt_evaluation(box, {0, 0, 1, 0}, syms, {0, 0, 1, 1});
+    check_wtt_evaluation(box, {1, 0, 0, 0}, syms, {1, 0, 0, 0});
+}
+
+TEST_CASE("Try ECC BOX") {
+    SWTA::Metadata metadata = { .number_of_internal_symbols = 1, .number_of_colors = 1 };
+
+    auto box_part1 = get_predefined_wtt(Predefined_WTT_Names::ECC_BOX1, metadata);
+    auto box_part2 = get_predefined_wtt(Predefined_WTT_Names::ECC_BOX2, metadata);
+    auto box = compose_wtts_sequentially(box_part1, box_part2);
+
+    std::vector<u32> syms = {0, 0, 0, 0};
+    check_wtt_evaluation(box, {0, 0, 0, 0}, syms, {0, 0, 0, 0});
+    check_wtt_evaluation(box, {0, 0, 0, 1}, syms, {0, 0, 0, 1});
+    check_wtt_evaluation(box, {0, 0, 1, 0}, syms, {0, 0, 1, 1});
+    check_wtt_evaluation(box, {1, 0, 0, 0}, syms, {1, 0, 0, 1});
+    check_wtt_evaluation(box, {1, 0, 1, 0}, syms, {1, 0, 1, 0});
+}
+
+TEST_CASE("Try ECC BOX Staircase") {
+    SWTA::Metadata metadata = { .number_of_internal_symbols = 1, .number_of_colors = 1 };
+
+    auto box_part1 = get_predefined_wtt(Predefined_WTT_Names::ECC_BOX1, metadata);
+    auto box_part2 = get_predefined_wtt(Predefined_WTT_Names::ECC_BOX2, metadata);
+    auto box = compose_wtts_sequentially(box_part1, box_part2);
+
+
+    u64 new_symbol = 1;
+    u64 offset = 2;
+    auto staircase = perform_staircase_construction(box, {0, 0, 0, 0}, offset, new_symbol);
+
+    {
+        std::vector<u32> syms = {0, 1, 0, 0};
+        check_wtt_evaluation(staircase, {0, 0, 0, 0}, syms, {0, 0, 0, 0});
+        check_wtt_evaluation(staircase, {0, 0, 1, 0}, syms, {0, 0, 1, 1});
+        check_wtt_evaluation(staircase, {1, 0, 1, 0}, syms, {1, 0, 1, 0});
+    }
+
+    {
+        std::vector<u32> syms = {0, 0, 0, 1, 0, 0};
+        check_wtt_evaluation(staircase, {0, 0, 0, 0, 0, 0}, syms, {0, 0, 0, 0, 0, 0});
+        check_wtt_evaluation(staircase, {0, 0, 0, 0, 0, 1}, syms, {0, 0, 0, 0, 0, 1});
+        check_wtt_evaluation(staircase, {1, 0, 0, 0, 0, 0}, syms, {1, 0, 0, 1, 0, 0});
+        check_wtt_evaluation(staircase, {1, 1, 1, 1, 1, 0}, syms, {1, 1, 1, 1, 1, 0});
+    }
+
+    write_wtt_with_debug_data(std::cout, staircase);
+    std::cout << staircase << "\n";
+}
+
+NFA build_color_language_automaton(const SWTA& swta) {
+    NFA nfa = build_frontier_automaton(swta);
+    NFA dfa = nfa.determinize();
+    dfa.complete();
+    return dfa;
+}
+
+TEST_CASE("ECC - check pre-post color abstractions are equivalent") {
+    auto ecc_pre  = get_predefined_swta(Predefined_SWTA_Names::ECC_PRE);
+    auto ecc_post = get_predefined_swta(Predefined_SWTA_Names::ECC_POST);
+
+    auto dfa_pre  = build_color_language_automaton(ecc_pre);
+    auto dfa_post = build_color_language_automaton(ecc_post);
+
+    bool are_equivalent = are_two_complete_dfas_equivalent(dfa_pre, dfa_post);
+    REQUIRE(are_equivalent);
+}
+
+TEST_CASE("ECC - check applying circuit to PRE does not change colors") {
+    auto ecc_pre  = get_predefined_swta(Predefined_SWTA_Names::ECC_PRE);
+
+    SWTA::Metadata metadata = { .number_of_internal_symbols = 1, .number_of_colors = 4 };
+
+    auto box_part1 = get_predefined_wtt(Predefined_WTT_Names::ECC_BOX1, metadata);
+    auto box_part2 = get_predefined_wtt(Predefined_WTT_Names::ECC_BOX2, metadata);
+    auto box = compose_wtts_sequentially(box_part1, box_part2);
+
+    u64 new_symbol = 1;
+    u64 offset = 2;
+    auto staircase = perform_staircase_construction(box, {0, 0, 0, 0}, offset, new_symbol);
+
+    auto ecc_result = apply_wtt_to_swta(ecc_pre, staircase);
+
+    auto dfa_pre    = build_color_language_automaton(ecc_pre);
+    auto dfa_result = build_color_language_automaton(ecc_result);
+
+    bool are_equivalent = are_two_complete_dfas_equivalent(dfa_pre, dfa_result);
+    REQUIRE(are_equivalent);
+}
+
+TEST_CASE("Verify ECC") {
+    auto ecc_pre  = get_predefined_swta(Predefined_SWTA_Names::ECC_PRE);
+    auto ecc_post  = get_predefined_swta(Predefined_SWTA_Names::ECC_POST);
+
+    SWTA::Metadata metadata = { .number_of_internal_symbols = 1, .number_of_colors = 4 };
+
+    auto box_part1 = get_predefined_wtt(Predefined_WTT_Names::ECC_BOX1, metadata);
+    auto box_part2 = get_predefined_wtt(Predefined_WTT_Names::ECC_BOX1, metadata);
+    auto box = compose_wtts_sequentially(box_part1, box_part2);
+
+    u64 new_symbol = 1;
+    u64 offset = 2;
+    auto staircase = perform_staircase_construction(box, {0, 0, 0, 0}, offset, new_symbol);
+
+    auto ecc_result = apply_wtt_to_swta(ecc_pre, staircase);
+
+    bool are_equivalent = are_two_swtas_color_equivalent(ecc_result, ecc_post);
+    std::cout << "ECC Verified successfully?: " << are_equivalent << "\n";
+}
