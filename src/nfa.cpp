@@ -172,6 +172,11 @@ void NFA::write_dot(std::ostream& stream) const {
                    << "label=\"" << this->debug_data->state_names.at(state) << "\", "
                    << "color=\"" << color << "\""
                    << "]";
+        } else {
+            stream << " ["
+                   << "label=\"" << state << "\", "
+                   << "color=\"" << color << "\""
+                   << "]";
         }
         stream << "\n";
     }
@@ -188,7 +193,35 @@ void NFA::write_dot(std::ostream& stream) const {
         }
     }
 
-    stream << "}";
+    stream << "}\n";
+}
+
+void print_diseq_witness(Worklist_Construction_Context<State_Pair>& ctx, u64 state) {
+    std::vector<State_Pair> states_by_handles;
+    states_by_handles.resize(ctx.handles.size());
+
+    for (auto& [state, handle] : ctx.handles) {
+        states_by_handles[handle] = state;
+    }
+
+    std::vector<u64> color_word;
+
+    State_Pair& current_state = states_by_handles[state];
+
+    while (current_state.pred != -1) {
+        u32 color       = current_state.pred >> 32;
+        u32 pred_handle = current_state.pred & (0xFFFFFFFF);
+
+        color_word.push_back(color);
+
+        current_state = states_by_handles[pred_handle];
+    }
+
+    std::cout << "Diseq witness: ";
+    for (auto color_it = color_word.rbegin(); color_it != color_word.rend(); color_it++) {
+        std::cout << *color_it << ", ";
+    }
+    std::cout << "\n";
 }
 
 bool are_two_complete_dfas_equivalent(const NFA& first_nfa, NFA& second_nfa) {
@@ -209,14 +242,19 @@ bool are_two_complete_dfas_equivalent(const NFA& first_nfa, NFA& second_nfa) {
         bool is_final_in_second = second_nfa.final_states.get_bit_value(current_pair->second);
 
         if (is_final_in_first != is_final_in_second) {
+            if (DEBUG) {
+                print_diseq_witness(context, current_pair->handle);
+            }
             return false;
         }
 
-        for (u64 color = 0; color < alphabet_size; color++) {
+        for (u32 color = 0; color < alphabet_size; color++) {
             auto first_post  = first_nfa.transitions[current_pair->first][color][0];
             auto second_post = second_nfa.transitions[current_pair->second][color][0];
 
-            State_Pair discovery = {.first = first_post, .second = second_post};
+            u64 pred = color << 32 | current_pair->handle;
+
+            State_Pair discovery = {.first = first_post, .second = second_post, .pred = pred };
             context.mark_discovery(discovery);
         }
     }

@@ -4,6 +4,9 @@
 #include "swta.hpp"
 
 
+bool DEBUG_STAIRCASE = 0;
+
+
 struct Staircase_State {
     u16 first_nth_qubit  = 0;
     u16 second_nth_qubit = 0;
@@ -201,7 +204,7 @@ WTT::Transition pad_transition_with_ids_right(Staircase_Construction_Ctx& ctx, W
             .second = pad_value,
         };
 
-        if (padded_state.second >= 0) {
+        if (DEBUG_STAIRCASE && padded_state.second >= 0) {
             std::cout << "From state: " << *source_state << " on "
                       << nth_qubit_result_will_read << "-th qubit we active the second component, producing a state: "
                       << padded_state << "\n";
@@ -238,7 +241,9 @@ WTT::Transition craft_unrestarted_transition(Staircase_Construction_Ctx& ctx, WT
     unrestart_linear_form(ctx, rr, transition_to_unrestart.rr);
 
     WTT::Transition result (ll, lr, rl, rr);
-    std::cout << "UNRestarting transition " << transition_to_unrestart << " yielded " << result << "\n";
+    if (DEBUG_STAIRCASE) {
+        std::cout << "UNRestarting transition " << transition_to_unrestart << " yielded " << result << "\n";
+    }
     return result;
 }
 
@@ -260,9 +265,9 @@ WTT perform_staircase_construction(WTT& box, const std::vector<Internal_Symbol>&
     while (ctx.worklist_state.has_more_to_explore()) {
         auto imm_state = ctx.worklist_state.extract();
 
-        do_on_debug({
+        if (DEBUG_STAIRCASE) {
             std::cout << "Exploring " << *imm_state << " :: "<< imm_state->handle << "\n";
-        });
+        }
 
         if (imm_state->second < 0) {
             if (imm_state->first < 0 || ctx.box.states_with_leaf_transitions.get_bit_value(imm_state->first)) {

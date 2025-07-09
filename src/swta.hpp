@@ -178,8 +178,14 @@ struct SWTA {
      */
     std::vector<Transitions_Along_Internal_Symbol> transitions;
 
+
+    struct Debug_Data {
+        std::map<State, std::string> state_names;
+    };
+
     std::vector<State> initial_states;
     Bit_Set            states_with_leaf_transitions;
+    Debug_Data*        debug_data = nullptr;
 
     SWTA(const Transition_Fn& aut_transitions, const std::vector<State>& init_states, const Bit_Set& final_state_set) :
         transitions(aut_transitions),
@@ -190,6 +196,48 @@ struct SWTA {
         transitions(aut_transitions),
         initial_states(init_states),
         states_with_leaf_transitions(aut_transitions.size(), final_state_set) {}
+
+    SWTA(SWTA&& other) :
+        transitions(other.transitions),
+        initial_states(other.initial_states),
+        states_with_leaf_transitions(other.states_with_leaf_transitions),
+        debug_data(other.debug_data)
+    {
+        other.debug_data = nullptr;
+    }
+
+    SWTA(const SWTA& other) :
+        transitions(other.transitions),
+        initial_states(other.initial_states),
+        states_with_leaf_transitions(other.states_with_leaf_transitions)
+    {
+        if (other.debug_data != nullptr) {
+            this->debug_data = new Debug_Data(*other.debug_data);
+        }
+    }
+
+    ~SWTA() {
+        if (this->debug_data != nullptr) delete debug_data;
+    }
+
+    SWTA& operator=(SWTA&& other) {
+        transitions = other.transitions;
+        initial_states = other.initial_states;
+        states_with_leaf_transitions = other.states_with_leaf_transitions;
+        this->debug_data = other.debug_data;
+        other.debug_data = nullptr;
+        return *this;
+    }
+
+    SWTA& operator=(const SWTA& other) {
+        transitions = other.transitions;
+        initial_states = other.initial_states;
+        states_with_leaf_transitions = other.states_with_leaf_transitions;
+        if (other.debug_data != nullptr) {
+            this->debug_data = new Debug_Data(*other.debug_data);
+        }
+        return *this;
+    }
 
     u64 number_of_states() const {
         return transitions.size();
@@ -355,7 +403,7 @@ struct WTT {
     }
 
     size_t number_of_colors() const {
-        return 0;
+        return 1;
     }
 
     void normalize_all_transitions() {
@@ -683,3 +731,5 @@ Color_Symbol_Abstraction build_color_internal_symbol_abstraction(const SWTA& swt
 SWTA apply_wtt_to_swta(const SWTA& swta, const WTT& wtt);
 
 WTT compose_wtts_horizontally(const WTT& first, const WTT& second);
+
+std::vector<Algebraic_Complex_Number> evaluate_wtt_on_tree(WTT& wtt, State root, std::vector<Algebraic_Complex_Number>& tree, const std::vector<u32>& internal_symbols, u32 sym_idx);

@@ -190,6 +190,7 @@ struct Worklist_Construction_Context {
 
 struct State_Pair {
     u64 first, second;
+    u64 pred = -1;
     u64 handle = -1;
 
     /**

@@ -47,6 +47,8 @@ enum class Predefined_SWTA_Names : u64 {
     GROVER_ALL_BASIS = 8,
 
     TEST_ADDER_ALL_3BASIS = 10,
+    ADDER_PRE        = 11,
+    ADDER_POST       = 12,
 };
 
 struct Def_State;
@@ -81,6 +83,8 @@ struct Def_Linear_Form {
     Subtree_Tag tag;
 
     Def_Linear_Form(const Def_Coef& def_coef, const Def_State& def_state) : coef(def_coef.number), state(def_state.state), tag(Subtree_Tag::NONE) {};
+
+    Def_Linear_Form(const Def_Linear_Form& other) : coef(other.coef), state(other.state), tag(other.tag) {};
 
     Def_Linear_Form operator*(const Subtree_Tag& tag) {
         this->tag = tag;

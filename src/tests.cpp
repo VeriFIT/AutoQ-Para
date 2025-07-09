@@ -1,5 +1,6 @@
 #include "arith.hpp"
 #include "bit_set.hpp"
+#include "nfa.hpp"
 #include "quantum_program.hpp"
 #include "swta.hpp"
 #include "swta_builders.hpp"
@@ -616,8 +617,8 @@ TEST_CASE("Verify adder circuit") {
     WTT maj = get_predefined_wtt(Predefined_WTT_Names::ADDER_MAJ_RESULT, metadata);
 
     WTT uma1 = get_predefined_wtt(Predefined_WTT_Names::ADDER_UMA1, metadata);
-    WTT uma2 = get_predefined_wtt(Predefined_WTT_Names::ADDER_UMA1, metadata);
-    WTT uma3 = get_predefined_wtt(Predefined_WTT_Names::ADDER_UMA1, metadata);
+    WTT uma2 = get_predefined_wtt(Predefined_WTT_Names::ADDER_UMA2, metadata);
+    WTT uma3 = get_predefined_wtt(Predefined_WTT_Names::ADDER_UMA3, metadata);
 
     WTT uma12  = compose_wtts_sequentially(uma1, uma2);
     WTT uma123 = compose_wtts_sequentially(uma12, uma3);
@@ -626,8 +627,8 @@ TEST_CASE("Verify adder circuit") {
     u64 box_offset = 2;
     u64 new_symbol = 1;
 
-    WTT maj_staircase = perform_staircase_construction(maj, box_inputs, box_offset, new_symbol, Staircase_Direction::LEFT_RIGHT);
-    WTT uma_staircase = perform_staircase_construction(maj, box_inputs, box_offset, new_symbol, Staircase_Direction::RIGHT_LEFT);
+    WTT maj_staircase = perform_staircase_construction(maj,    box_inputs, box_offset, new_symbol, Staircase_Direction::LEFT_RIGHT);
+    WTT uma_staircase = perform_staircase_construction(uma123, box_inputs, box_offset, new_symbol, Staircase_Direction::RIGHT_LEFT);
 
     WTT id1 = get_predefined_wtt(Predefined_WTT_Names::TEST_FIXED_ID1, metadata);
     WTT extended_maj_staircase = compose_wtts_horizontally(maj_staircase, id1);
@@ -635,5 +636,34 @@ TEST_CASE("Verify adder circuit") {
 
     WTT middle_piece = get_predefined_wtt(Predefined_WTT_Names::ADDER_MIDDLE, metadata);
 
-    auto result = compose_wtts_horizontally(id1, id1);
+    WTT result12  = compose_wtts_sequentially(extended_maj_staircase, middle_piece);
+    WTT adder_circuit = compose_wtts_sequentially(result12, extended_uma_staircase);
+
+    SWTA precondition = get_predefined_swta(Predefined_SWTA_Names::ADDER_PRE);
+    SWTA postcondition = get_predefined_swta(Predefined_SWTA_Names::ADDER_POST);
+
+    SWTA result_swta = apply_wtt_to_swta(precondition, adder_circuit);
+    std::cout << "Result has: " << result_swta.number_of_states() << " states.\n";
+
+    auto precondition_dfa = build_frontier_automaton(precondition).determinize();
+    precondition_dfa.complete();
+    auto result_dfa       = build_frontier_automaton(postcondition).determinize();
+    result_dfa.complete();
+
+    bool are_two_swtas_equivalent = are_two_swtas_color_equivalent(result_swta, postcondition);
+    std::cout << "Are equivalent: " << are_two_swtas_equivalent << "\n";
+
+    // 0 1 0 0
+     std::vector<u64> ints = {
+         0, 0, 0, 0, 0, 0, 0, 0,
+         0, 0, 0, 0, 1, 0, 0, 0,
+     };
+     std::vector<Algebraic_Complex_Number> nums;
+     for (auto i : ints) {
+         nums.push_back(Algebraic_Complex_Number(i, 0, 0, 0, 0));
+     }
+
+     std::cout << evaluate_wtt_on_tree(adder_circuit, 0, nums, {0, 1, 0, 0}, 0);
+
 }
+

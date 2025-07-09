@@ -166,7 +166,7 @@ struct Bit_Set {
         u64 spilled_size = min_size % bits_in_bucket();
         if (spilled_size == 0) return true;
 
-        u64 mask =~((~0) << spilled_size); // Extract only the relevant bits
+        u64 mask =~((~static_cast<u64>(0)) << spilled_size); // Extract only the relevant bits
         u64 spilled_interleaved = this->data[chunks_to_compare] | other.data[chunks_to_compare];
 
         spilled_interleaved = spilled_interleaved & mask;
@@ -186,9 +186,9 @@ struct Bit_Set {
         u64 bucket_offset     = bit_idx % bits_in_bucket();
 
         if (value) {
-            this->data[target_bucket_idx] = this->data[target_bucket_idx] | (1u << bucket_offset);
+            this->data[target_bucket_idx] = this->data[target_bucket_idx] | (static_cast<u64>(1u) << bucket_offset);
         } else {
-            this->data[target_bucket_idx] = this->data[target_bucket_idx] & ~(1u << bucket_offset);
+            this->data[target_bucket_idx] = this->data[target_bucket_idx] & ~(static_cast<u64>(1u) << bucket_offset);
         }
     }
 
@@ -233,7 +233,7 @@ struct Bit_Set {
         u64 bucket_offset     = bit_idx % bits_in_bucket();
 
         u64 bucket_value = this->data[target_bucket_idx];
-        u64 bit_value = (bucket_value & (1u << bucket_offset)) > 0;
+        u64 bit_value = (bucket_value & (static_cast<u64>(1u) << bucket_offset)) > 0;
 
         return bit_value;
     }

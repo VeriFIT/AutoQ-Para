@@ -1,10 +1,23 @@
 #include "predefined_automata.hpp"
 #include "arith.hpp"
+#include "basics.hpp"
 #include "swta.hpp"
 
 #include <stdexcept>
 #include <string>
 
+struct Alternative_Id_Helper {
+    State ida;
+    State idb;
+    std::vector<Def_Linear_Form> ida_branch;
+    std::vector<Def_Linear_Form> idb_branch;
+    std::vector<Def_Linear_Form> ida_fin_branch;
+    std::vector<Def_Linear_Form> idb_fin_branch;
+
+    bool is_id(State state) const {
+        return state == ida || state == idb;
+    }
+};
 
 Def_Linear_Form Def_Coef::operator*(const Def_State& other) {
     return Def_Linear_Form(*this, other);
@@ -803,8 +816,8 @@ WTT get_predefined_wtt(Predefined_WTT_Names name, const SWTA::Metadata& swta_met
         }
 
         { // q_id_1 --w--> ( q_leaf(L), q_leaf(R) )
-             DLF left_subtree  { one * q_leaf * Subtree_Tag::RIGHT};
-             DLF right_subtree { one * q_leaf * Subtree_Tag::LEFT};
+             DLF left_subtree  { one * q_leaf * Subtree_Tag::LEFT };
+             DLF right_subtree { one * q_leaf * Subtree_Tag::RIGHT };
              auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
              builder.add_transition(q_id_1, working_qubit, transition);
         }
@@ -1036,14 +1049,13 @@ WTT get_predefined_wtt(Predefined_WTT_Names name, const SWTA::Metadata& swta_met
     }
 
     if (name == Predefined_WTT_Names::ADDER_MIDDLE) {
-        State q_wait   = 0;
-        State q_idle1  = 1;
-        State q_decide = 2;
-        State q_swap   = 3;
-        State q_noswap = 4;
-        State q_leaf   = 5;
+        State q_wait     = 0;
+        State q_ac       = 1;
+        State q_c_swap   = 2;
+        State q_c_noswap = 3;
+        State q_leaf     = 4;
 
-        u64 number_of_states = 6;
+        u64 number_of_states = 5;
 
         Internal_Symbol working_qubit = 0;
         Internal_Symbol alt_working_qubit = 1;
@@ -1065,41 +1077,45 @@ WTT get_predefined_wtt(Predefined_WTT_Names name, const SWTA::Metadata& swta_met
         }
 
         { // q_wait --W'--> ( q_idle1(L), q_idle1(R) )
-             DLF left_subtree  { one * q_idle1 * Subtree_Tag::LEFT  };
-             DLF right_subtree { one * q_idle1 * Subtree_Tag::RIGHT };
+             DLF left_subtree  { one * q_ac * Subtree_Tag::LEFT  };
+             DLF right_subtree { one * q_ac * Subtree_Tag::RIGHT };
              auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
-             builder.add_transition(q_wait, working_qubit, transition);
+             builder.add_transition(q_wait, alt_working_qubit, transition);
         }
 
-        { // q_idle1 --w--> ( q_decide(L), q_decide(R) )
-             DLF left_subtree  { one * q_decide * Subtree_Tag::LEFT  };
-             DLF right_subtree { one * q_decide * Subtree_Tag::RIGHT };
+        { // q_ac --w--> ( q_noswap(L), q_swap(R) )
+             DLF left_subtree  { one * q_c_noswap * Subtree_Tag::LEFT  };
+             DLF right_subtree { one * q_c_swap   * Subtree_Tag::RIGHT };
              auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
-             builder.add_transition(q_idle1, working_qubit, transition);
-        }
-
-        { // q_decide --w--> ( q_noswap(L), q_swap(R) )
-             DLF left_subtree  { one * q_noswap * Subtree_Tag::LEFT  };
-             DLF right_subtree { one * q_swap   * Subtree_Tag::RIGHT };
-             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
-             builder.add_transition(q_decide, working_qubit, transition);
+             builder.add_transition(q_ac, working_qubit, transition);
         }
 
         { // q_no_swap --w--> ( q_leaf(L), q_leaf(R) )
              DLF left_subtree  { one * q_leaf * Subtree_Tag::LEFT  };
              DLF right_subtree { one * q_leaf * Subtree_Tag::RIGHT };
              auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
-             builder.add_transition(q_noswap, working_qubit, transition);
+             builder.add_transition(q_c_noswap, working_qubit, transition);
         }
 
         { // q_swap --w--> ( q_leaf(R), q_leaf(L) )
              DLF left_subtree  { one * q_leaf * Subtree_Tag::RIGHT };
              DLF right_subtree { one * q_leaf * Subtree_Tag::LEFT  };
              auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
-             builder.add_transition(q_swap, working_qubit, transition);
+             builder.add_transition(q_c_swap, working_qubit, transition);
         }
 
         WTT result = builder.build(number_of_states);
+
+        if (DEBUG) {
+            result.debug_data = new WTT::Debug_Data;
+            auto& state_names = result.debug_data->state_names;
+            state_names[q_wait]     = "Wait";
+            state_names[q_ac]       = "Decide(A)";
+            state_names[q_c_swap]   = "Swap";
+            state_names[q_c_noswap] = "nowap";
+            state_names[q_leaf]     = "leaf";
+        }
+
         return result;
     }
 
@@ -1109,10 +1125,11 @@ WTT get_predefined_wtt(Predefined_WTT_Names name, const SWTA::Metadata& swta_met
 
         u64 number_of_states = 2;
 
-        Internal_Symbol working_qubit = 0;
+        Internal_Symbol working_qubit      = 0;
+        Internal_Symbol working_qubit_stop = 1;
         Color color = 0;
 
-        SWTA::Metadata metadata = { .number_of_internal_symbols = 1, .number_of_colors = 1 };
+        SWTA::Metadata metadata = { .number_of_internal_symbols = 2, .number_of_colors = 1 };
         WTT_Builder builder (metadata);
 
         builder.mark_state_initial(q_root);
@@ -1559,7 +1576,7 @@ SWTA get_predefined_swta(Predefined_SWTA_Names name) {
 
         Internal_Symbol working_qubit = 0;
         Color one_left  = 0;
-        Color one_right = 0;
+        Color one_right = 1;
 
         SWTA::Metadata metadata = { .number_of_internal_symbols = 1, .number_of_colors = 2 };
         SWTA::Transition_Builder builder (metadata);
@@ -1617,6 +1634,379 @@ SWTA get_predefined_swta(Predefined_SWTA_Names name) {
         return result;
     }
 
+    if (name == Predefined_SWTA_Names::ADDER_POST) {
+        State aQ_bQ_cQ = 0;
+
+        State aQ_bQ_c0 = 1;
+        State aQ_bQ_c1 = 2;
+
+        State aQ_b0_c0_parity0 = 3;
+        State aQ_b0_c0_parity1 = 4;
+
+        State aQ_b0_c1_parity0 = 5;
+        State aQ_b0_c1_parity1 = 6;
+
+        State aQ_b1_c0_parity0 = 7;
+        State aQ_b1_c0_parity1 = 8;
+
+        State aQ_b1_c1_parity0 = 9;
+        State aQ_b1_c1_parity1 = 10;
+
+        State aQ_b0_c0_parity0_fin = 11;
+        State aQ_b0_c0_parity1_fin = 12;
+
+        State aQ_b0_c1_parity0_fin = 13;
+        State aQ_b0_c1_parity1_fin = 14;
+
+        State aQ_b1_c0_parity0_fin = 15;
+        State aQ_b1_c0_parity1_fin = 16;
+
+        State aQ_b1_c1_parity0_fin = 17;
+        State aQ_b1_c1_parity1_fin = 18;
+
+        State c0_last = 19;
+        State c1_last = 20;
+
+        State ida  = 21;
+        State idb  = 22;
+        State id_last_b  = 23;
+        State id_last_a  = 24;
+        State id_last_c  = 25;
+        State leaf = 26;
+
+        u64 number_of_states = 27;
+
+        Internal_Symbol working_qubit = 0;
+        Internal_Symbol working_qubit_stop = 1;
+
+        Color one_left  = 0;
+        Color one_right = 1;
+
+        SWTA::Metadata metadata = { .number_of_internal_symbols = 2, .number_of_colors = 2 };
+        SWTA::Transition_Builder builder (metadata);
+
+        Def_Coef one  (ACN::ONE());
+        Def_Coef zero (ACN::ZERO());
+
+        DLF zero_ida_branch     = { zero * ida };
+        DLF zero_idb_branch     = { zero * idb };
+        DLF zero_ida_fin_branch = { zero * id_last_a };
+        DLF zero_idb_fin_branch = { zero * id_last_b };
+        DLF zero_leaf_branch    = { zero * leaf };
+        DLF one_leaf_branch     = { one * leaf };
+
+        Alternative_Id_Helper id_helper = {
+            .ida = ida,
+            .idb = idb,
+            .ida_branch = zero_ida_branch,
+            .idb_branch = zero_idb_branch,
+            .ida_fin_branch = zero_ida_fin_branch,
+            .idb_fin_branch = zero_idb_fin_branch,
+        };
+
+        auto add_transition = [&builder, &working_qubit](State source, Color color, const Def_Linear_Form& left_successor, const Def_Linear_Form& right_successor) {
+            DLF left_subtree   {left_successor};
+            DLF right_subtree  {right_successor};
+            auto transition = synthetize_swta_transition(left_subtree, right_subtree);
+            builder.add_transition(source, working_qubit, color, transition);
+        };
+
+        auto add_fin_transition = [&builder, &working_qubit_stop](State source, Color color, const Def_Linear_Form& left_successor, const Def_Linear_Form& right_successor) {
+            DLF left_subtree   {left_successor};
+            DLF right_subtree  {right_successor};
+            auto transition = synthetize_swta_transition(left_subtree, right_subtree);
+            builder.add_transition(source, working_qubit_stop, color, transition);
+        };
+
+        // ------------------------- aQ_bQ_cQ -------------------------
+        add_transition(aQ_bQ_cQ, one_left,  one*aQ_bQ_c0, zero*idb);
+        add_transition(aQ_bQ_cQ, one_right, zero*idb, one*aQ_bQ_c1);
+
+        // ------------------------- aQ_bQ_c0 -------------------------
+        add_transition(aQ_bQ_c0, one_left,  one*aQ_b0_c0_parity0, one*aQ_b0_c0_parity1);
+        add_transition(aQ_bQ_c0, one_right, one*aQ_b1_c0_parity0, one*aQ_b1_c0_parity1);
+
+        add_fin_transition(aQ_bQ_c0, one_left,  one*aQ_b0_c0_parity0_fin, one*aQ_b0_c0_parity1_fin);
+        add_fin_transition(aQ_bQ_c0, one_right, one*aQ_b1_c0_parity0_fin, one*aQ_b1_c0_parity1_fin);
+
+        // ------------------------- aQ_bQ_c1 -------------------------
+        add_transition(aQ_bQ_c1, one_left,  one*aQ_b0_c1_parity0, one*aQ_b0_c1_parity1);
+        add_transition(aQ_bQ_c1, one_right, one*aQ_b1_c1_parity0, one*aQ_b1_c1_parity1);
+
+        add_fin_transition( aQ_bQ_c1, one_left, one*aQ_b0_c1_parity0_fin, one*aQ_b0_c1_parity1_fin);
+        add_fin_transition(aQ_bQ_c1, one_right, one*aQ_b1_c1_parity0_fin, one*aQ_b1_c1_parity1_fin);
+
+        auto ets = idb; // Empty tree successor
+
+        // ------------------------- aQ_b0_c0_parity0 -------------------------
+        add_transition(aQ_b0_c0_parity0, one_left,  one*aQ_bQ_c0, zero*ets); // Parity(0, 0, 0) == 0
+        add_transition(aQ_b0_c0_parity0, one_right, zero*ets,     zero*ets); // Parity(1, 0, 0) != 0
+
+        // ------------------------- aQ_b0_c0_parity1 -------------------------
+        add_transition(aQ_b0_c0_parity1, one_left,  zero*ets, zero*ets);     // Parity(0, 0, 0) != 1
+        add_transition(aQ_b0_c0_parity1, one_right, zero*ets, one*aQ_bQ_c0); // Parity(1, 0, 0) == 1
+
+        // ------------------------- aQ_b0_c1_parity0 -------------------------
+        add_transition(aQ_b0_c1_parity0, one_left,  zero*ets, zero*ets);     // Parity(0, 0, 1) != 0
+        add_transition(aQ_b0_c1_parity0, one_right, zero*ets, one*aQ_bQ_c1); // Parity(1, 0, 1) == 0
+
+        // ------------------------- aQ_b0_c1_parity1 -------------------------
+        add_transition(aQ_b0_c1_parity1, one_left,  one*aQ_bQ_c0, zero*ets);  // Parity(0, 0, 1) == 1
+        add_transition(aQ_b0_c1_parity1, one_right, zero*ets, zero*ets);      // Parity(1, 0, 1) != 1
+
+        // ------------------------- aQ_b1_c0_parity0 -------------------------
+        add_transition(aQ_b1_c0_parity0, one_left,  zero*ets, zero*ets);      // Parity(0, 1, 0) != 0
+        add_transition(aQ_b1_c0_parity0, one_right, zero*ets, one*aQ_bQ_c1);  // Parity(1, 1, 0) == 0
+
+        // ------------------------- aQ_b1_c0_parity1 -------------------------
+        add_transition(aQ_b1_c0_parity1, one_left,  one*aQ_bQ_c0, zero*ets);  // Parity(0, 1, 0) == 1
+        add_transition(aQ_b1_c0_parity1, one_right, zero*ets, zero*ets);      // Parity(1, 1, 0) != 1
+
+        // ------------------------- aQ_b1_c0_parity1 -------------------------
+        add_transition(aQ_b1_c0_parity1, one_left,  one*aQ_bQ_c0, zero*ets);  // Parity(0, 1, 0) == 1
+        add_transition(aQ_b1_c0_parity1, one_right, zero*ets, zero*ets);      // Parity(1, 1, 0) != 1
+
+        // ------------------------- aQ_b1_c1_parity0 -------------------------
+        add_transition(aQ_b1_c1_parity0, one_left,  one*aQ_bQ_c1, zero*ets);  // Parity(0, 1, 1) == 0
+        add_transition(aQ_b1_c1_parity0, one_right, zero*ets, zero*ets);      // Parity(1, 1, 1) != 0
+
+        // ------------------------- aQ_b1_c1_parity1 -------------------------
+        add_transition(aQ_b1_c1_parity1, one_left,  zero*ets, zero*ets);      // Parity(0, 1, 1) != 1
+        add_transition(aQ_b1_c1_parity1, one_right, zero*ets, one*aQ_bQ_c1);  // Parity(1, 1, 1) == 1
+
+        //
+        //  FIN states
+        //
+
+        // ------------------------- aQ_b0_c0_parity0_fin -------------------------
+        add_transition(aQ_b0_c0_parity0_fin, one_left,  one*c0_last,    zero*id_last_c); // Parity(0, 0, 0) == 0
+        add_transition(aQ_b0_c0_parity0_fin, one_right, zero*id_last_c, zero*id_last_c); // Parity(1, 0, 0) != 0
+
+        // ------------------------- aQ_b0_c0_parity1_fin -------------------------
+        add_transition(aQ_b0_c0_parity1_fin, one_left,  zero*id_last_c, zero*id_last_c); // Parity(0, 0, 0) != 1
+        add_transition(aQ_b0_c0_parity1_fin, one_right, zero*id_last_c, one*c0_last);    // Parity(1, 0, 0) == 1
+
+        // ------------------------- aQ_b0_c1_parity0_fin -------------------------
+        add_transition(aQ_b0_c1_parity0_fin, one_left,  zero*id_last_c, zero*id_last_c); // Parity(0, 0, 1) != 0
+        add_transition(aQ_b0_c1_parity0_fin, one_right, zero*id_last_c, one*c1_last);    // Parity(1, 0, 1) == 0
+
+        // ------------------------- aQ_b0_c1_parity1_fin -------------------------
+        add_transition(aQ_b0_c1_parity1_fin, one_left,  one*c0_last,    zero*id_last_c); // Parity(0, 0, 1) == 1
+        add_transition(aQ_b0_c1_parity1_fin, one_right, zero*id_last_c, zero*id_last_c); // Parity(1, 0, 1) != 1
+
+        // ------------------------- aQ_b1_c0_parity0_fin -------------------------
+        add_transition(aQ_b1_c0_parity0_fin, one_left,  zero*id_last_c, zero*id_last_c);  // Parity(0, 1, 0) != 0
+        add_transition(aQ_b1_c0_parity0_fin, one_right, zero*id_last_c, one*c1_last);     // Parity(1, 1, 0) == 0
+
+        // ------------------------- aQ_b1_c0_parity1_fin -------------------------
+        add_transition(aQ_b1_c0_parity1_fin, one_left,  one*c0_last,    zero*id_last_c);  // Parity(0, 1, 0) == 1
+        add_transition(aQ_b1_c0_parity1_fin, one_right, zero*id_last_c, zero*id_last_c);  // Parity(1, 1, 0) != 1
+
+        // ------------------------- aQ_b1_c1_parity0_fin -------------------------
+        add_transition(aQ_b1_c1_parity0_fin, one_left,  one*c1_last,    zero*id_last_c);  // Parity(0, 1, 1) == 0
+        add_transition(aQ_b1_c1_parity0_fin, one_right, zero*id_last_c, zero*id_last_c);  // Parity(1, 1, 1) != 0
+
+        // ------------------------- aQ_b1_c1_parity1_fin -------------------------
+        add_transition(aQ_b1_c1_parity1_fin, one_left,  zero*id_last_c, zero*id_last_c);  // Parity(0, 1, 1) != 1
+        add_transition(aQ_b1_c1_parity1_fin, one_right, zero*id_last_c, one*c1_last);     // Parity(1, 1, 1) == 1
+
+        add_transition(c0_last, one_left, one*leaf,  zero*leaf);
+        add_transition(c1_last, one_left, zero*leaf, one*leaf);
+
+        // The id state
+        add_transition(ida, one_left,  zero*idb, zero*idb);
+        add_transition(ida, one_right, zero*idb, zero*idb);
+
+        add_transition(idb, one_left,  zero*ida, zero*ida);
+        add_transition(idb, one_right, zero*ida, zero*ida);
+
+        add_fin_transition(idb, one_left,  zero*id_last_a, zero*id_last_a);
+        add_fin_transition(idb, one_right, zero*id_last_a, zero*id_last_a);
+
+        // --------------- id_last_b ---------------
+        add_transition(id_last_b, one_left,  zero*id_last_a, zero*id_last_a);
+        add_transition(id_last_b, one_right, zero*id_last_a, zero*id_last_a);
+
+        add_transition(id_last_a, one_left,  zero*id_last_c, zero*id_last_c);
+        add_transition(id_last_a, one_right, zero*id_last_c, zero*id_last_c);
+
+        add_transition(id_last_c, one_left, zero*leaf, zero*leaf);
+
+        std::vector<State> initial_states ({aQ_bQ_cQ});
+        Bit_Set leaf_states (number_of_states, { leaf });
+        auto transition_fn = builder.build(number_of_states);
+        SWTA result (transition_fn, initial_states, leaf_states);
+
+        do_on_debug({
+            result.debug_data = new SWTA::Debug_Data();
+            auto& state_names = result.debug_data->state_names;
+
+            state_names[aQ_bQ_cQ]     = "(a b c)";
+
+            state_names[aQ_bQ_c0]     = "(a b 0)";
+            state_names[aQ_bQ_c1]     = "(a b 1)";
+
+            state_names[aQ_b0_c0_parity0]     = "(a 0 0).p0";
+            state_names[aQ_b0_c0_parity1]     = "(a 0 0).p1";
+
+            state_names[aQ_b0_c1_parity0]     = "(a 0 1).p0";
+            state_names[aQ_b0_c1_parity1]     = "(a 0 1).p1";
+
+            state_names[aQ_b1_c0_parity0]     = "(a 1 0).p0";
+            state_names[aQ_b1_c0_parity1]     = "(a 1 0).p1";
+
+            state_names[aQ_b1_c1_parity0]     = "(a 1 1).p0";
+            state_names[aQ_b1_c0_parity1]     = "(a 1 0).p1";
+
+            state_names[aQ_b0_c0_parity0_fin] = "F(a 0 0).p0";
+            state_names[aQ_b0_c0_parity1_fin] = "F(a 0 0).p1";
+
+            state_names[aQ_b0_c1_parity0_fin] = "F(a 0 0).p0";
+            state_names[aQ_b0_c1_parity1_fin] = "F(a 0 0).p1";
+
+            state_names[aQ_b1_c0_parity0_fin] = "F(a 1 0).p0";
+            state_names[aQ_b1_c0_parity1_fin] = "F(a 1 0).p1";
+
+            state_names[aQ_b1_c1_parity0_fin] = "F(a 1 1).p0";
+            state_names[aQ_b1_c1_parity1_fin] = "F(a 1 1).p1";
+
+            state_names[c0_last] = "c0_last";
+            state_names[c1_last] = "c1_last";
+            state_names[ida]      = "IDa";
+            state_names[idb]      = "IDb";
+            state_names[id_last_b] = "ID_last_b";
+            state_names[id_last_a] = "ID_last_a";
+            state_names[id_last_c] = "ID_last_c";
+            state_names[leaf]    = "leaf";
+        });
+
+        return result;
+    }
+
+    if (name == Predefined_SWTA_Names::ADDER_PRE) {
+        State q_c  = 0;
+        State q_a  = 1;
+        State q_b  = 2;
+        State id   = 3;
+        State ac   = 4;
+        State c    = 5;
+        State leaf = 6;
+
+        u64 number_of_states = 7;
+
+        Internal_Symbol working_qubit      = 0;
+        Internal_Symbol working_qubit_stop = 1;
+
+        Color one_left  = 0;
+        Color one_right = 1;
+
+        SWTA::Metadata metadata = { .number_of_internal_symbols = 2, .number_of_colors = 2 };
+        SWTA::Transition_Builder builder (metadata);
+
+        Def_Coef one  (ACN::ONE());
+        Def_Coef zero (ACN::ZERO());
+
+        DLF zero_id_branch =   { zero * id   };
+        DLF zero_leaf_branch = { zero * leaf };
+        DLF one_leaf_branch =  { one * leaf  };
+
+        auto add_left_transition = [&one, &builder, &zero_id_branch, &working_qubit, &one_left, &id](State source, State destination) {
+             if (destination == id) {
+                  auto transition = synthetize_swta_transition(zero_id_branch, zero_id_branch);
+                  builder.add_transition(source, working_qubit, one_left, transition);
+                  return;
+             }
+             DLF left_subtree  {one  * destination };
+             auto transition = synthetize_swta_transition(left_subtree, zero_id_branch);
+             builder.add_transition(source, working_qubit, one_left, transition);
+
+        };
+
+        auto add_right_transition = [&one, &builder, &zero_id_branch, &working_qubit, &one_right, &id](State source, State destination) {
+             if (destination == id) {
+                  auto transition = synthetize_swta_transition(zero_id_branch, zero_id_branch);
+                  builder.add_transition(source, working_qubit, one_right, transition);
+                  return;
+             }
+             DLF right_subtree  {one  * destination };
+             auto transition = synthetize_swta_transition(zero_id_branch, right_subtree);
+             builder.add_transition(source, working_qubit, one_right, transition);
+        };
+
+        auto add_left_fin_transition = [&one, &builder, &zero_id_branch, &working_qubit_stop, &one_left, &id](State source, State destination) {
+             if (destination == id) {
+                  auto transition = synthetize_swta_transition(zero_id_branch, zero_id_branch);
+                  builder.add_transition(source, working_qubit_stop, one_left, transition);
+                  return;
+             }
+             DLF left_subtree  {one  * destination };
+             auto transition = synthetize_swta_transition(left_subtree, zero_id_branch);
+             builder.add_transition(source, working_qubit_stop, one_left, transition);
+
+        };
+
+        auto add_right_fin_transition = [&one, &builder, &zero_id_branch, &working_qubit_stop, &one_right, &id](State source, State destination) {
+             if (destination == id) {
+                  auto transition = synthetize_swta_transition(zero_id_branch, zero_id_branch);
+                  builder.add_transition(source, working_qubit_stop, one_right, transition);
+                  return;
+             }
+             DLF right_subtree  {one  * destination };
+             auto transition = synthetize_swta_transition(zero_id_branch, right_subtree);
+             builder.add_transition(source, working_qubit_stop, one_right, transition);
+        };
+
+        add_left_transition(q_c, q_b);
+        add_right_transition(q_c, q_b);
+
+        add_left_transition(q_b, q_a);
+        add_right_transition(q_b, q_a);
+        add_left_fin_transition(q_b, ac);
+        add_right_fin_transition(q_b, ac);
+
+        add_left_transition(q_a, q_b);
+        add_right_transition(q_a, q_b);
+
+        add_left_transition(ac, c);
+        add_right_transition(ac, c);
+
+        {
+             auto transition = synthetize_swta_transition(one_leaf_branch, zero_leaf_branch);
+             builder.add_transition(c, working_qubit, one_left, transition);
+        }
+
+        { // The last read bit is always 0, the postcondition must handle different values of c_n using internal symbols
+             // auto transition = synthetize_swta_transition(zero_leaf_branch, zero_leaf_branch);
+             // builder.add_transition(c, working_qubit, one_right, transition);
+        }
+
+        // The id state
+        add_left_transition(id, id);
+        add_right_transition(id, id);
+        add_left_fin_transition(id, id);
+        add_right_fin_transition(id, id);
+
+        std::vector<State> initial_states ({q_c});
+        Bit_Set leaf_states (number_of_states, { leaf, id });
+        auto transition_fn = builder.build(number_of_states);
+        SWTA result (transition_fn, initial_states, leaf_states);
+
+        do_on_debug({
+            result.debug_data = new SWTA::Debug_Data();
+            auto& state_names = result.debug_data->state_names;
+
+            state_names[q_a]  = "Qa";
+            state_names[q_b]  = "Qb";
+            state_names[q_c]  = "Qc";
+            state_names[id]   = "ID";
+            state_names[ac]   = "AC";
+            state_names[c]    = "C";
+            state_names[leaf] = "leaf";
+
+        });
+
+        return result;
+    }
 
     throw std::runtime_error("No definition for the predefined SWTA: " + std::to_string(static_cast<u64>(name)));
 }

@@ -4,6 +4,8 @@
 #include "nfa.hpp"
 #include "basics.hpp"
 
+#include <sstream>
+#include <string>
 #include <vector>
 #include <map>
 #include <set>
@@ -107,6 +109,7 @@ std::ostream& operator<<(std::ostream& os, const WTT::Transition& wtt_transition
 std::ostream& operator<<(std::ostream& os, const WTT& wtt) {
     os << "WTT {\n";
     os << "  initial states: " << wtt.initial_states << "\n";
+    os << "  leaf states: " << wtt.states_with_leaf_transitions.into_vector() << "\n";
 
     for (u64 state = 0; state < wtt.number_of_states(); state++) {
         const std::vector<WTT::Transition>& transitions_from_state = wtt.transitions[state];
@@ -209,6 +212,26 @@ WTT compose_wtts_sequentially(WTT& first, WTT& second) {
     }
 
     WTT result = builder.build(worklist_state.handles.size());
+
+    if (DEBUG) {
+        result.debug_data = new WTT::Debug_Data;
+        auto& state_names = result.debug_data->state_names;
+
+        auto make_label = [](const WTT& wtt, u64 state) {
+            if (!wtt.debug_data) return std::to_string(state);
+
+            if (wtt.debug_data->state_names.contains(state)) return wtt.debug_data->state_names.at(state);
+            return std::to_string(state);
+        };
+
+        for (auto& [state, handle] : worklist_state.handles) {
+            std::string first_label = make_label(first, state.first);
+            std::string second_label = make_label(second, state.second);
+            std::string label = "(" + first_label + ", " + second_label + ")";
+
+            state_names[handle] = label;
+        }
+    }
     return result;
 }
 
@@ -246,26 +269,26 @@ Macrostate compute_post(const Macrostate* macrostate, const WTT& wtt, Color colo
 
     for (State state : macrostate->state_names) {
         auto& transitions_from_state = wtt.transitions[state];
-        auto& transitions_for_color  = transitions_from_state[color];
+        auto& transitions_for_symbol  = transitions_from_state[symbol];
 
-        if (!transitions_for_color.is_present()) {
+        if (!transitions_for_symbol.is_present()) {
             post.state_set.clear();
             break;
         }
 
-        for (auto& component : transitions_for_color.ll.components) {
+        for (auto& component : transitions_for_symbol.ll.components) {
             post.state_set.set_bit(component.state);
         }
 
-        for (auto& component : transitions_for_color.lr.components) {
+        for (auto& component : transitions_for_symbol.lr.components) {
             post.state_set.set_bit(component.state);
         }
 
-        for (auto& component : transitions_for_color.rl.components) {
+        for (auto& component : transitions_for_symbol.rl.components) {
             post.state_set.set_bit(component.state);
         }
 
-        for (auto& component : transitions_for_color.rr.components) {
+        for (auto& component : transitions_for_symbol.rr.components) {
             post.state_set.set_bit(component.state);
         }
     }
@@ -294,6 +317,22 @@ void initialize_frontier_with_initial_states(Worklist_Construction_Context<Macro
     }
 
     builder.mark_state_initial(0);
+}
+
+std::string make_macrostate_label_using_debug_data(const Macrostate& macrostate, std::map<State, std::string>& state_names) {
+    std::stringstream result;
+    result << "{";
+    u64 cnt = 0;
+    for (auto state: macrostate.state_names) {
+        cnt += 1;
+        std::string state_label = state_names.contains(state) ? state_names.at(state) : std::to_string(state);
+        result << state_label;
+        if (cnt < macrostate.state_names.size()) {
+            result << ",";
+        }
+    }
+    result << "}";
+    return result.str();
 }
 
 template <typename Tree_Transition_System>
@@ -329,13 +368,22 @@ NFA build_frontier_automaton(const Tree_Transition_System& tts, s64 root) {
 
     NFA result = builder.build(worklist_state.handles.size());
 
-    do_on_debug({
+    if (DEBUG) {
         result.debug_data = new NFA::Debug_Data;
 
-        for (auto& [macrostate, handle] : worklist_state.handles) {
-            result.debug_data->state_names.emplace(handle, macrostate.to_string());
+        if (tts.debug_data == nullptr) {
+            auto& state_names = tts.debug_data->state_names;
+
+            for (auto& [macrostate, handle] : worklist_state.handles) {
+                result.debug_data->state_names.emplace(handle, macrostate.to_string());
+            }
+        } else {
+            for (auto& [macrostate, handle] : worklist_state.handles) {
+                auto macrostate_label = make_macrostate_label_using_debug_data(macrostate, tts.debug_data->state_names);
+                result.debug_data->state_names.emplace(handle, macrostate_label);
+            }
         }
-    });
+    };
 
     return result;
 }
@@ -434,7 +482,7 @@ void WTT::remove_zeros_from_transitions() {
 SWTA::Transition compose_swta_transition_with_wtt(const SWTA::Transition& swta_transition, const WTT::Transition& wtt_transition, Worklist_Construction_Context<State_Pair>& worklist_state) {
     SWTA::Transition result;
 
-    extend_form_with_product_and_node_discoveries(result.left, swta_transition.left, wtt_transition.ll, worklist_state);
+    extend_form_with_product_and_node_discoveries(result.left, swta_transition.left,  wtt_transition.ll, worklist_state);
     extend_form_with_product_and_node_discoveries(result.left, swta_transition.right, wtt_transition.lr, worklist_state);
 
     extend_form_with_product_and_node_discoveries(result.right, swta_transition.right, wtt_transition.rr, worklist_state);
@@ -455,7 +503,7 @@ std::ostream& operator<<(std::ostream& out, const SWTA::Transition_Builder& buil
 SWTA apply_wtt_to_swta(const SWTA& swta, const WTT& wtt) {
     Worklist_Construction_Context<State_Pair> worklist_state;
 
-    Bit_Set leaf_states (0);
+    Bit_Set leaf_states (1);
     std::vector<State> initial_states;
     SWTA::Transition_Builder transition_builder ( swta.get_metadata() );
 
@@ -490,8 +538,20 @@ SWTA apply_wtt_to_swta(const SWTA& swta, const WTT& wtt) {
 
     }
 
-    auto transition_fn = transition_builder.build(worklist_state.handles.size());
+    leaf_states.grow(worklist_state.handles.size());
+    auto transition_fn = transition_builder.build();
     SWTA result (transition_fn, initial_states, leaf_states);
+
+    if (DEBUG) {
+        result.debug_data = new SWTA::Debug_Data;
+        for (auto& [state, handle] : worklist_state.handles) {
+            std::string swta_label = swta.debug_data->state_names.contains(state.first) ? swta.debug_data->state_names.at(state.first) : std::to_string(state.first);
+            std::string wtt_label = wtt.debug_data->state_names.contains(state.second) ? wtt.debug_data->state_names.at(state.second) : std::to_string(state.second);
+
+            result.debug_data->state_names[handle] = "(" + swta_label + ", " + wtt_label + ")";
+        }
+    }
+
     return result;
 }
 
@@ -755,14 +815,15 @@ struct Propagation_Info {
 
 struct Affine_Program_Propagation_Context {
     const Affine_Program<Branch_Product_Sym>& program;
-    ACN_Matrix                    final_vector;
-    std::vector<State_Delta_Info> state_deltas;
-    std::vector<State>            worklist;
-    std::vector<ACN_Matrix>       state_vector_spaces;
-    u64                           state_space_dimension;
-    std::vector<Propagation_Info> propagation_log;
-    s64                           final_state_with_nonzero = -1;
-    bool                          check_final_state_early = true;
+    ACN_Matrix                          final_vector;
+    const Underlying_SWTA_Info_Pair&    underlying_swtas;
+    std::vector<State_Delta_Info>       state_deltas;
+    std::vector<State>                  worklist;
+    std::vector<ACN_Matrix>             state_vector_spaces;
+    u64                                 state_space_dimension;
+    std::vector<Propagation_Info>       propagation_log;
+    s64                                 final_state_with_nonzero = -1;
+    bool                                check_final_state_early = true;
 };
 
 struct Propagation_Stats {
@@ -787,7 +848,7 @@ std::vector<Propagation_Info*> filter_propagations_for_those_that_affect_state(s
     return filtered_propagations;
 }
 
-void write_propagation_info(std::map<State, std::string> state_names, Propagation_Info& info, bool write_state_names = false) {
+void write_propagation_info(std::map<State, std::string> state_names, Propagation_Info& info, Affine_Program_Propagation_Context& ctx, bool write_state_names = false) {
     std::cout << "Propagated from "
               << info.source;
     if (write_state_names) {
@@ -798,23 +859,39 @@ void write_propagation_info(std::map<State, std::string> state_names, Propagatio
         std::cout << " aka " << state_names.at(info.target);
     }
     std::cout <<" along " << info.symbol_info << "\n";
-    std::cout << "  row entering pipe : " << info.source_row << "\n";
-    std::cout << "  row exiting pipe(0):" << info.propagated_row << "\n";
-    std::cout << "  row exiting pipe(1):" << info.propagated_row_after_insert << "\n";
+
+    auto translate_into_states = [&state_names, &ctx](ACN_Matrix& row) {
+        for (u32 state = 0; state < row.width; state++) {
+            if (!row.at(0, state).is_zero()) {
+                std::cout << "  :> Q" << state << " = " << row.at(0, state) << "\n";
+            }
+        }
+    };
+
+    std::cout << "  row entering pipe : \n";
+    translate_into_states(info.source_row);
+    std::cout << "\n";
+
+    std::cout << "  row exiting pipe : \n";
+    translate_into_states(info.propagated_row);
+    std::cout << "\n";
+
+    // std::cout << "  row exiting pipe(0):" << info.propagated_row << "\n";
+    // std::cout << "  row exiting pipe(1):" << info.propagated_row_after_insert << "\n";
     // std::cout << "  pipe matrix:" << propagation_ptr->symbol_matrix << "\n";
 }
 
 void dump_propagations(std::vector<Propagation_Info*> propagations, Affine_Program_Propagation_Context& context) {
     std::map<State, std::string>& state_names = context.program.debug_data->state_names;
     for (auto propagation_ptr : propagations) {
-        write_propagation_info(state_names, *propagation_ptr);
+        write_propagation_info(state_names, *propagation_ptr, context);
     }
 }
 
 void dump_propagations(std::vector<Propagation_Info> propagations, Affine_Program_Propagation_Context& context) {
     std::map<State, std::string>& state_names = context.program.debug_data->state_names;
     for (auto propagation_ptr : propagations) {
-        write_propagation_info(state_names, propagation_ptr);
+        write_propagation_info(state_names, propagation_ptr, context);
     }
 }
 
@@ -907,7 +984,7 @@ bool does_affine_program_reach_nonzero_final_states(const Affine_Program<Branch_
     }
 
     Propagation_Stats stats;
-    Affine_Program_Propagation_Context context(program, final_vector);
+    Affine_Program_Propagation_Context context(program, final_vector, swta_pair_info);
     {  // Initialize the context
         context.state_space_dimension = swta_state_cnt;
         context.state_vector_spaces.reserve(program.number_of_states());
@@ -1344,6 +1421,7 @@ void write_wtt_transition_with_debug_data(std::ostream& os, const WTT::Transitio
 void write_wtt_with_debug_data(std::ostream& os, const WTT& wtt) {
     os << "WTT {\n";
     os << "  initial states: " << wtt.initial_states << "\n";
+    os << "  leaf states: " << wtt.states_with_leaf_transitions.into_vector() << "\n";
 
     u64 transition_cnt = 0;
     for (u64 state = 0; state < wtt.number_of_states(); state++) {
@@ -1416,6 +1494,72 @@ WTT compose_wtts_horizontally(const WTT& first, const WTT& second) {
         if (second.states_with_leaf_transitions.get_bit_value(second_state)) {
             result.states_with_leaf_transitions.set_bit(second_state + state_offset);
         }
+    }
+
+    return result;
+}
+
+std::vector<Algebraic_Complex_Number> evaluate_wtt_on_tree(WTT& wtt, State root, std::vector<Algebraic_Complex_Number>& tree, const std::vector<u32>& internal_symbols, u32 sym_idx) {
+    if (wtt.states_with_leaf_transitions.get_bit_value(root)) {
+        assert (tree.size() == 1);
+        return { tree[0] };
+    }
+
+    std::vector<Algebraic_Complex_Number> left_half, right_half;
+    u64 i = 0;
+
+    for (; i < tree.size() / 2; i++) {
+        left_half.push_back(tree[i]);
+    }
+
+    for (; i < tree.size(); i++) {
+        right_half.push_back(tree[i]);
+    }
+
+    auto symbol = internal_symbols[sym_idx];
+    auto& transition = wtt.transitions[root][symbol];
+
+    assert (tree.size() >= 2);
+
+
+    std::vector<Algebraic_Complex_Number> left_result, right_result;
+    left_result.resize(tree.size() / 2);
+    right_result.resize(tree.size() / 2);
+
+    auto vector_mad = [](std::vector<Algebraic_Complex_Number>& dest, std::vector<Algebraic_Complex_Number>& vector, Algebraic_Complex_Number& constant) {
+        for (u64 idx = 0; idx < dest.size(); idx++) {
+            dest[idx] += constant * vector[idx];
+        }
+    };
+
+    for (auto& component : transition.ll.components) {
+        auto component_result = evaluate_wtt_on_tree(wtt, component.state, left_half, internal_symbols, sym_idx+1);
+        vector_mad(left_result, component_result, component.coef);
+    }
+
+    for (auto& component : transition.lr.components) {
+        auto component_result = evaluate_wtt_on_tree(wtt, component.state, right_half, internal_symbols, sym_idx+1);
+        vector_mad(left_result, component_result, component.coef);
+    }
+
+    for (auto& component : transition.rl.components) {
+        auto component_result = evaluate_wtt_on_tree(wtt, component.state, left_half, internal_symbols, sym_idx+1);
+        vector_mad(right_result, component_result, component.coef);
+    }
+
+    for (auto& component : transition.rr.components) {
+        auto component_result = evaluate_wtt_on_tree(wtt, component.state, right_half, internal_symbols, sym_idx+1);
+        vector_mad(right_result, component_result, component.coef);
+    }
+
+
+    std::vector<Algebraic_Complex_Number> result (left_result.begin(), left_result.end());
+    for (auto& acn : right_result) result.push_back(acn);
+
+    if (root == 2) {
+        std::cout << tree << "\n yielded \n" << result << "\n";
+        std::cout << "Left subtree: " << left_result << "\n";
+        std::cout << "Right subtree: " << right_result << "\n";
     }
 
     return result;
