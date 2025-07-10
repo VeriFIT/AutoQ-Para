@@ -7,7 +7,7 @@ set(CMAKE_PREFIX_PATH
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-find_package(Catch2 REQUIRED)
+find_package(Catch2)
 find_library(GMP_LIBRARY gmp)
 
 project(
