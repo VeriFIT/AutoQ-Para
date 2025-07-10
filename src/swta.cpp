@@ -1086,7 +1086,7 @@ bool does_affine_program_reach_nonzero_final_states(const Affine_Program<Branch_
 
         do_on_debug({std::cout << "Performed " << context.propagation_log.size() << " propagations.\n"; });
 
-        if (reaches_nonzero) {
+        if (reaches_nonzero && DEBUG_COLOR_EQUIVALENCE) {
             auto filtered_propagations = filter_propagations_for_those_that_affect_state(context.propagation_log, context.final_state_with_nonzero);
             dump_propagations(filtered_propagations, context);
         }
