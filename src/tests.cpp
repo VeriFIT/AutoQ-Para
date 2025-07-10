@@ -784,9 +784,6 @@ TEST_CASE("Try ECC BOX Staircase") {
         check_wtt_evaluation(staircase, {1, 0, 0, 0, 0, 0}, syms, {1, 0, 0, 1, 0, 0});
         check_wtt_evaluation(staircase, {1, 1, 1, 1, 1, 0}, syms, {1, 1, 1, 1, 1, 0});
     }
-
-    write_wtt_with_debug_data(std::cout, staircase);
-    std::cout << staircase << "\n";
 }
 
 NFA build_color_language_automaton(const SWTA& swta) {
@@ -836,7 +833,7 @@ TEST_CASE("Verify ECC") {
     SWTA::Metadata metadata = { .number_of_internal_symbols = 1, .number_of_colors = 4 };
 
     auto box_part1 = get_predefined_wtt(Predefined_WTT_Names::ECC_BOX1, metadata);
-    auto box_part2 = get_predefined_wtt(Predefined_WTT_Names::ECC_BOX1, metadata);
+    auto box_part2 = get_predefined_wtt(Predefined_WTT_Names::ECC_BOX2, metadata);
     auto box = compose_wtts_sequentially(box_part1, box_part2);
 
     u64 new_symbol = 1;
@@ -847,4 +844,259 @@ TEST_CASE("Verify ECC") {
 
     bool are_equivalent = are_two_swtas_color_equivalent(ecc_result, ecc_post);
     std::cout << "ECC Verified successfully?: " << are_equivalent << "\n";
+}
+
+TEST_CASE("Hamiltonian simulation - check neccessary ACN multiplications") {
+    using ACN = Algebraic_Complex_Number;
+    ACN omega (0, 1, 0, 0, 0);
+    ACN minus_omega_pow3 (0, 0, 0, -1, 0);
+
+    ACN result = omega*minus_omega_pow3;
+    REQUIRE(result.is_integer());
+    REQUIRE(result.into_fixed_precision().a == 1);
+}
+
+TEST_CASE("Hamiltonian simulation - check RZZ construction") {
+    using ACN = Algebraic_Complex_Number;
+
+    SWTA::Metadata metadata = {
+        .number_of_internal_symbols = 1,
+        .number_of_colors = 1,
+    };
+
+    // Compose the RZZ box
+    WTT rzz_box   = get_predefined_wtt(Predefined_WTT_Names::HAMILTONIAN_RZZ, metadata);
+
+    {
+        std::vector<u32> syms = {0, 0};
+        auto tree = construct_tree_for_quantum_state({0, 1});
+        auto result = evaluate_wtt_on_tree(rzz_box, 0, tree, syms, 0);
+
+        ACN omega (1, 0, 0, 0, 0);
+        std::vector<ACN> expected_result = { ACN::ZERO(), omega, ACN::ZERO(), ACN::ZERO() };
+
+        REQUIRE(result == expected_result);
+    }
+
+    {
+        std::vector<u32> syms = {0, 0};
+        auto tree = construct_tree_for_quantum_state({1, 1});
+        auto result = evaluate_wtt_on_tree(rzz_box, 0, tree, syms, 0);
+
+        ACN minus_omega3 (0, 0, 0, -1, 0);
+        std::vector<ACN> expected_result = { ACN::ZERO(), ACN::ZERO(), ACN::ZERO(), minus_omega3 };
+
+        REQUIRE(result == expected_result);
+    }
+}
+
+TEST_CASE("Hamiltonian simulation - check RXX construction") {
+    using ACN = Algebraic_Complex_Number;
+
+    SWTA::Metadata metadata = {
+        .number_of_internal_symbols = 1,
+        .number_of_colors = 1,
+    };
+
+    WTT rxx_box   = get_predefined_wtt(Predefined_WTT_Names::HAMILTONIAN_RXX, metadata);
+
+    {
+        std::vector<u32> syms = {0, 0};
+        std::vector<s64> basis = {0, 0};
+        auto tree = construct_tree_for_quantum_state(basis);
+        auto result = evaluate_wtt_on_tree(rxx_box, 0, tree, syms, 0);
+
+        for (auto& acn : result) {
+            acn.normalize();
+        }
+
+        std::vector<ACN> expected_result = {ACN(1, 0, 0, -1, 2), ACN::ZERO(), ACN::ZERO(), ACN(-1, 0, 0, -1, 2)};
+        REQUIRE(result == expected_result);
+    }
+}
+
+TEST_CASE("Hamiltonian simulation - check RYY construction") {
+    using ACN = Algebraic_Complex_Number;
+
+    SWTA::Metadata metadata = {
+        .number_of_internal_symbols = 1,
+        .number_of_colors = 1,
+    };
+
+    WTT ryy_box   = get_predefined_wtt(Predefined_WTT_Names::HAMILTONIAN_RYY, metadata);
+
+    {
+        std::vector<u32> syms = {0, 0};
+        std::vector<s64> basis = {0, 0};
+        auto tree = construct_tree_for_quantum_state(basis);
+        auto result = evaluate_wtt_on_tree(ryy_box, 0, tree, syms, 0);
+
+        for (auto& acn : result) {
+            acn.normalize();
+        }
+
+        std::vector<ACN> expected_result = {ACN(1, 0, 0, -1, 2), ACN::ZERO(), ACN::ZERO(), ACN(1, 0, 0, 1, 2)};
+        REQUIRE(result == expected_result);
+    }
+}
+
+TEST_CASE("Hamiltonian simulation - check staircase applications preserve colors") {
+    SWTA::Metadata metadata = {
+        .number_of_internal_symbols = 1,
+        .number_of_colors = 1,
+    };
+
+    SWTA precondition = get_predefined_swta(Predefined_SWTA_Names::HAMILTONIAN_ALL_BASIS);
+
+    WTT rxx_box = get_predefined_wtt(Predefined_WTT_Names::HAMILTONIAN_RXX, metadata);
+    WTT ryy_box = get_predefined_wtt(Predefined_WTT_Names::HAMILTONIAN_RYY, metadata);
+    WTT rzz_box = get_predefined_wtt(Predefined_WTT_Names::HAMILTONIAN_RZZ, metadata);
+
+    Internal_Symbol terminating_symbol = 1;
+    u64 box_offset = 1;
+    std::vector<u64> box_input_labels = {0, 0};
+
+    auto rzz_staircase = perform_staircase_construction(rxx_box, box_input_labels, box_offset, terminating_symbol);
+    auto rxx_staircase = perform_staircase_construction(rxx_box, box_input_labels, box_offset, terminating_symbol);
+    auto ryy_staircase = perform_staircase_construction(rxx_box, box_input_labels, box_offset, terminating_symbol);
+
+    NFA pre_dfa       = build_color_language_automaton(precondition);
+
+    auto result_zz = apply_wtt_to_swta(precondition, rzz_staircase);
+    {
+        NFA result_zz_dfa = build_color_language_automaton(result_zz);
+        bool are_equivalent = are_two_complete_dfas_equivalent(result_zz_dfa, pre_dfa);
+        REQUIRE(are_equivalent);
+    }
+
+    auto result_xx = apply_wtt_to_swta(result_zz, rxx_staircase);
+    {
+        NFA result_xx_dfa = build_color_language_automaton(result_xx);
+        bool are_equivalent = are_two_complete_dfas_equivalent(result_xx_dfa, pre_dfa);
+        REQUIRE(are_equivalent);
+    }
+
+    auto result_yy = apply_wtt_to_swta(result_xx, ryy_staircase);
+    {
+        NFA result_yy_dfa = build_color_language_automaton(result_yy);
+        bool are_equivalent = are_two_complete_dfas_equivalent(result_yy_dfa, pre_dfa);
+        REQUIRE(are_equivalent);
+    }
+}
+
+TEST_CASE("Hamiltonian simulation - check optimized circuit stages") {
+    using ACN = Algebraic_Complex_Number;
+
+    SWTA::Metadata metadata;
+
+    WTT sqrt_x_stage = get_predefined_wtt(Predefined_WTT_Names::HAMILTONIAN_SQRT_X_STAGE, metadata);
+    WTT s_stage = get_predefined_wtt(Predefined_WTT_Names::HAMILTONIAN_S_STAGE, metadata);
+    WTT h_stage = get_predefined_wtt(Predefined_WTT_Names::HAMILTONIAN_H_STAGE, metadata);
+
+    std::vector<s64> basis_00 {0, 0};
+    std::vector<s64> basis_01 {0, 1};
+
+    std::vector<u32> internal_symbols {1, 0};
+    {
+        auto tree = construct_tree_for_quantum_state(basis_00);
+        auto result = evaluate_wtt_on_tree(sqrt_x_stage, 0, tree, internal_symbols, 0);
+
+        for (auto& acn : result) {
+            acn.normalize();
+        }
+
+        std::vector<Algebraic_Complex_Number> expected_result = { ACN(0, 0, 1, 0, 2), ACN(1, 0, 0, 0, 2), ACN(1, 0, 0, 0, 2), ACN(0, 0, -1, 0, 2)};
+        REQUIRE(expected_result == result);
+    }
+
+    {
+        auto tree = construct_tree_for_quantum_state(basis_01);
+        auto result = evaluate_wtt_on_tree(s_stage, 0, tree, internal_symbols, 0);
+
+        for (auto& acn : result) {
+            acn.normalize();
+        }
+
+        std::vector<Algebraic_Complex_Number> expected_result = { ACN(), ACN(0, 0, 1, 0, 0), ACN(), ACN()};
+        REQUIRE(expected_result == result);
+    }
+
+    {
+        auto tree = construct_tree_for_quantum_state(basis_00);
+        auto result = evaluate_wtt_on_tree(h_stage, 0, tree, internal_symbols, 0);
+
+        for (auto& acn : result) {
+            acn.normalize();
+        }
+
+        std::vector<Algebraic_Complex_Number> expected_result = { ACN(1, 0, 0, 0, 2), ACN(1, 0, 0, 0, 2), ACN(1, 0, 0, 0, 2), ACN(1, 0, 0, 0, 2)};
+        REQUIRE(expected_result == result);
+    }
+}
+
+TEST_CASE("Verify Hamiltonian simulation") {
+    using ACN = Algebraic_Complex_Number;
+
+    SWTA::Metadata metadata;
+
+    WTT rzz_box   = get_predefined_wtt(Predefined_WTT_Names::HAMILTONIAN_RZZ, metadata);
+    WTT rzz_stage = perform_staircase_construction(rzz_box, {0, 0}, 1, 1);
+
+    WTT rxx_box   = get_predefined_wtt(Predefined_WTT_Names::HAMILTONIAN_RXX, metadata);
+    WTT rxx_stage = perform_staircase_construction(rxx_box, {0, 0}, 1, 1);
+
+    WTT ryy_box   = get_predefined_wtt(Predefined_WTT_Names::HAMILTONIAN_RYY, metadata);
+    WTT ryy_stage = perform_staircase_construction(ryy_box, {0, 0}, 1, 1);
+
+    WTT uzz_box   = get_predefined_wtt(Predefined_WTT_Names::HAMILTONIAN_UZZ, metadata);
+    WTT uzz_stage = perform_staircase_construction(uzz_box, {0, 0}, 1, 1);
+
+    WTT sqrt_x_stage = get_predefined_wtt(Predefined_WTT_Names::HAMILTONIAN_SQRT_X_STAGE, metadata);
+    WTT s_stage = get_predefined_wtt(Predefined_WTT_Names::HAMILTONIAN_S_STAGE, metadata);
+    WTT h_stage = get_predefined_wtt(Predefined_WTT_Names::HAMILTONIAN_H_STAGE, metadata);
+    WTT last_x_stage = get_predefined_wtt(Predefined_WTT_Names::HAMILTONIAN_LAST_X_STAGE, metadata);
+
+    std::vector<WTT> circuit_stages = {
+        h_stage,       // 0
+        rzz_stage,     // 1
+        sqrt_x_stage,  // 2
+        uzz_stage,     // 3
+        last_x_stage,  // 4
+        s_stage,       // 5
+        rxx_stage,     // 6
+        ryy_stage,     // 7
+    };
+
+    SWTA precondition = get_predefined_swta(Predefined_SWTA_Names::HAMILTONIAN_ALL_BASIS);
+
+    SWTA_Program naive_program = {
+        .initial_swta = precondition,
+        .transducers = circuit_stages,
+        .applications = {
+            Transducer_Application(0),
+            Transducer_Application(1),
+            Transducer_Application(2),
+            Transducer_Application(3),
+            Transducer_Application(4),
+            Transducer_Application(0),
+            Transducer_Application(5),
+            Transducer_Application(1),
+        },
+    };
+
+    SWTA_Program optimized_program = {
+        .initial_swta = precondition,
+        .transducers = circuit_stages,
+        .applications = {
+            Transducer_Application(6),
+            Transducer_Application(7),
+            Transducer_Application(1),
+        },
+    };
+
+    auto naive_program_result     = run_swta_program(naive_program);
+    auto optimized_program_result = run_swta_program(optimized_program);
+
+    bool are_equivalent = are_two_swtas_color_equivalent(naive_program_result, optimized_program_result);
+    REQUIRE(are_equivalent);
 }

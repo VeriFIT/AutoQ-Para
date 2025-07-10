@@ -276,10 +276,32 @@ struct Algebraic_Complex_Number {
     }
 
     bool is_integer() const {
-        return (mpz_cmp_ui(this->b, 0) == 0) &&
-               (mpz_cmp_ui(this->c, 0) == 0) &&
-               (mpz_cmp_ui(this->d, 0) == 0) &&
-               (mpz_cmp_ui(this->k, 0) == 0);
+        bool is_real = (mpz_cmp_ui(this->b, 0) == 0) &&
+                       (mpz_cmp_ui(this->c, 0) == 0) &&
+                       (mpz_cmp_ui(this->d, 0) == 0);
+
+        if (!is_real) return false;
+
+        s64 k = mpz_get_si(this->k);
+        if (k > 0) {
+            if (k & static_cast<s64>(1)) return false;
+            s64 dividing_power_of_two = k >> 1;
+
+            s64 a = mpz_get_si(this->a);
+            if (a == 0) return true;
+
+            s64 a_two_power = 0;
+
+            while (!(a & 1)) {
+                a_two_power += 1;
+                a >>= 1;
+            }
+
+            return (a_two_power >= dividing_power_of_two);
+        } else {
+            bool multiplying_by_sqrt2 = std::abs(k) & 1;
+            return !multiplying_by_sqrt2;
+        }
     }
 
     void swap(Algebraic_Complex_Number& other) noexcept {

@@ -50,6 +50,62 @@ SWTA::Transition synthetize_swta_transition(const std::vector<Def_Linear_Form>& 
     return SWTA::Transition(ll, rr);
 }
 
+WTT construct_stage_for_hamiltonian(const Algebraic_Complex_Number& ll, const Algebraic_Complex_Number& lr, const Algebraic_Complex_Number& rl, const Algebraic_Complex_Number& rr) {
+    using DLF = std::vector<Def_Linear_Form>;
+
+    State q_apply      = 0;
+    State q_apply_last = 1;
+    State q_leaf       = 2;
+
+    u64 number_of_states = 3;
+
+    Internal_Symbol working_qubit = 0;
+    Internal_Symbol working_qubit_stop = 1;
+
+    SWTA::Metadata metadata = { .number_of_internal_symbols = 2, .number_of_colors = 1 };
+    WTT_Builder builder (metadata);
+
+    builder.mark_state_initial(q_apply);
+    builder.mark_state_final(q_leaf);
+
+    Def_Coef def_ll(ll);
+    Def_Coef def_lr(lr);
+    Def_Coef def_rl(rl);
+    Def_Coef def_rr(rr);
+
+    auto add_single_target_transition = [&builder, &def_ll, &def_lr, &def_rl, &def_rr](State source, State target, Internal_Symbol internal_sym) {
+         DLF left_subtree  { def_ll * target * Subtree_Tag::LEFT };
+         if (!def_lr.number.is_zero()) {
+             left_subtree.push_back( def_lr * target * Subtree_Tag::RIGHT );
+         }
+
+         DLF right_subtree { def_rr * target * Subtree_Tag::RIGHT };
+         if (!def_rl.number.is_zero()) {
+             right_subtree.push_back( def_rl * target * Subtree_Tag::LEFT );
+         }
+
+         auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+         builder.add_transition(source, internal_sym, transition);
+    };
+
+    add_single_target_transition(q_apply, q_apply, working_qubit);
+    add_single_target_transition(q_apply, q_apply_last, working_qubit_stop);
+    add_single_target_transition(q_apply_last, q_leaf, working_qubit);
+
+    WTT result = builder.build(number_of_states);
+
+    if (DEBUG) {
+        result.debug_data = new WTT::Debug_Data;
+        auto& state_names = result.debug_data->state_names;
+
+        state_names[q_apply]      = "apply";
+        state_names[q_apply_last] = "apply.last";
+        state_names[q_leaf]       = "leaf";
+    }
+
+    return result;
+}
+
 WTT get_predefined_wtt(Predefined_WTT_Names name, const SWTA::Metadata& swta_metadata) {
     using DLF = std::vector<Def_Linear_Form>;
     using ACN = Algebraic_Complex_Number;
@@ -1257,8 +1313,346 @@ WTT get_predefined_wtt(Predefined_WTT_Names name, const SWTA::Metadata& swta_met
 
         return result;
 
-     }
+    }
 
+    if (name == Predefined_WTT_Names::HAMILTONIAN_BC_CNOT) {
+        State q_decide  = 0;
+        State q_swap    = 1;
+        State q_no_swap = 2;
+        State q_leaf    = 3;
+
+        u64 number_of_states = 4;
+
+        Internal_Symbol working_qubit = 0;
+
+        SWTA::Metadata metadata = { .number_of_internal_symbols = 1, .number_of_colors = 1 };
+        WTT_Builder builder (metadata);
+
+        builder.mark_state_initial(q_decide);
+        builder.mark_state_final(q_leaf);
+
+        Def_Coef one  (ACN::ONE());
+
+        auto add_transition = [&builder, &one, &working_qubit](State source, State left_target, Subtree_Tag left_tag, State right_target, Subtree_Tag right_tag) {
+             DLF left_subtree  { one*left_target*left_tag };
+             DLF right_subtree { one*right_target*right_tag };
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(source, working_qubit, transition);
+        };
+
+        add_transition(q_decide, q_no_swap, Subtree_Tag::LEFT, q_swap, Subtree_Tag::RIGHT);
+        add_transition(q_swap, q_leaf, Subtree_Tag::RIGHT, q_leaf, Subtree_Tag::LEFT);
+        add_transition(q_no_swap, q_leaf, Subtree_Tag::LEFT, q_leaf, Subtree_Tag::RIGHT);
+
+        WTT result = builder.build(number_of_states);
+
+        if (DEBUG) {
+            result.debug_data = new WTT::Debug_Data;
+            auto& state_names = result.debug_data->state_names;
+
+            state_names[q_decide]  = "decide";
+            state_names[q_no_swap] = "no_swp";
+            state_names[q_swap]    = "swp";
+            state_names[q_leaf]    = "leaf";
+        }
+
+        return result;
+    }
+
+    if (name == Predefined_WTT_Names::HAMILTONIAN_BC_RZ) {
+        State q_idle    = 0;
+        State q_apply   = 1;
+        State q_leaf    = 2;
+
+        u64 number_of_states = 3;
+
+        Internal_Symbol working_qubit = 0;
+
+        SWTA::Metadata metadata = { .number_of_internal_symbols = 1, .number_of_colors = 1 };
+        WTT_Builder builder (metadata);
+
+        builder.mark_state_initial(q_idle);
+        builder.mark_state_final(q_leaf);
+
+        Def_Coef one          (ACN::ONE());
+        Def_Coef omega1       (ACN(1, 0, 0, 0, 0));
+        Def_Coef minus_omega3 (ACN(0, 0, 0, -1, 0));
+
+        auto add_transition = [&builder, &one, &working_qubit](State source, const Def_Linear_Form& left_successor, const Def_Linear_Form& right_successor) {
+             DLF left_subtree  { left_successor };
+             DLF right_subtree { right_successor };
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(source, working_qubit, transition);
+        };
+
+        add_transition(q_idle,  one*q_apply*Subtree_Tag::LEFT, one*q_apply*Subtree_Tag::RIGHT);
+        add_transition(q_apply, minus_omega3*q_leaf*Subtree_Tag::LEFT, omega1*q_leaf*Subtree_Tag::RIGHT);
+
+        WTT result = builder.build(number_of_states);
+
+        if (DEBUG) {
+            result.debug_data = new WTT::Debug_Data;
+            auto& state_names = result.debug_data->state_names;
+
+            state_names[q_idle]  = "idle";
+            state_names[q_apply] = "apply";
+            state_names[q_leaf]  = "leaf";
+        }
+
+        return result;
+    }
+
+    if (name == Predefined_WTT_Names::HAMILTONIAN_BC_X) {
+        State q_idle    = 0;
+        State q_apply   = 1;
+        State q_leaf    = 2;
+
+        u64 number_of_states = 3;
+
+        Internal_Symbol working_qubit = 0;
+
+        SWTA::Metadata metadata = { .number_of_internal_symbols = 1, .number_of_colors = 1 };
+        WTT_Builder builder (metadata);
+
+        builder.mark_state_initial(q_idle);
+        builder.mark_state_final(q_leaf);
+
+        Def_Coef one          (ACN::ONE());
+
+        auto add_transition = [&builder, &one, &working_qubit](State source, const Def_Linear_Form& left_successor, const Def_Linear_Form& right_successor) {
+             DLF left_subtree  { left_successor };
+             DLF right_subtree { right_successor };
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(source, working_qubit, transition);
+        };
+
+        add_transition(q_idle,  one*q_apply*Subtree_Tag::LEFT, one*q_apply*Subtree_Tag::RIGHT);
+        add_transition(q_apply, one*q_leaf*Subtree_Tag::RIGHT, one*q_leaf*Subtree_Tag::LEFT);
+
+        WTT result = builder.build(number_of_states);
+
+        if (DEBUG) {
+            result.debug_data = new WTT::Debug_Data;
+            auto& state_names = result.debug_data->state_names;
+
+            state_names[q_idle]  = "idle";
+            state_names[q_apply] = "apply-swap";
+            state_names[q_leaf]  = "leaf";
+        }
+
+        return result;
+    }
+
+    if (name == Predefined_WTT_Names::HAMILTONIAN_BC_H) {
+        State q_apply1  = 0;
+        State q_apply2  = 1;
+        State q_leaf    = 2;
+
+        u64 number_of_states = 3;
+
+        Internal_Symbol working_qubit = 0;
+
+        SWTA::Metadata metadata = { .number_of_internal_symbols = 1, .number_of_colors = 1 };
+        WTT_Builder builder (metadata);
+
+        builder.mark_state_initial(q_apply1);
+        builder.mark_state_final(q_leaf);
+
+        Def_Coef one         (ACN::ONE());
+        Def_Coef invsqrt     (ACN::ONE_OVER_SQRT2());
+        Def_Coef neg_invsqrt (-ACN::ONE_OVER_SQRT2());
+
+        { // q_apply1
+             DLF left_subtree  { invsqrt * q_apply2 * Subtree_Tag::LEFT,     invsqrt * q_apply2 * Subtree_Tag::RIGHT };
+             DLF right_subtree { invsqrt * q_apply2 * Subtree_Tag::LEFT, neg_invsqrt * q_apply2 * Subtree_Tag::RIGHT };
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(q_apply1, working_qubit, transition);
+        }
+
+        { // q_apply2
+             DLF left_subtree  { invsqrt * q_leaf * Subtree_Tag::LEFT,     invsqrt * q_leaf * Subtree_Tag::RIGHT };
+             DLF right_subtree { invsqrt * q_leaf * Subtree_Tag::LEFT, neg_invsqrt * q_leaf * Subtree_Tag::RIGHT };
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(q_apply2, working_qubit, transition);
+        }
+
+        WTT result = builder.build(number_of_states);
+
+        if (DEBUG) {
+            result.debug_data = new WTT::Debug_Data;
+            auto& state_names = result.debug_data->state_names;
+
+            state_names[q_apply1] = "apply1";
+            state_names[q_apply2] = "apply2";
+            state_names[q_leaf]   = "leaf";
+        }
+
+        return result;
+    }
+
+    if (name == Predefined_WTT_Names::HAMILTONIAN_BC_S) {
+        State q_apply1  = 0;
+        State q_apply2  = 1;
+        State q_leaf    = 2;
+
+        u64 number_of_states = 3;
+
+        Internal_Symbol working_qubit = 0;
+
+        SWTA::Metadata metadata = { .number_of_internal_symbols = 1, .number_of_colors = 1 };
+        WTT_Builder builder (metadata);
+
+        builder.mark_state_initial(q_apply1);
+        builder.mark_state_final(q_leaf);
+
+        Def_Coef one          (ACN::ONE());
+        Def_Coef complex_unit (ACN(0, 0, 1, 0, 0));
+
+        { // q_apply1
+             DLF left_subtree  {          one * q_apply2 * Subtree_Tag::LEFT };
+             DLF right_subtree { complex_unit * q_apply2 * Subtree_Tag::RIGHT };
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(q_apply1, working_qubit, transition);
+        }
+
+        { // q_apply2
+             DLF left_subtree  {          one * q_leaf * Subtree_Tag::LEFT };
+             DLF right_subtree { complex_unit * q_leaf * Subtree_Tag::RIGHT };
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(q_apply2, working_qubit, transition);
+        }
+
+        WTT result = builder.build(number_of_states);
+
+        if (DEBUG) {
+            result.debug_data = new WTT::Debug_Data;
+            auto& state_names = result.debug_data->state_names;
+
+            state_names[q_apply1] = "apply1";
+            state_names[q_apply2] = "apply2";
+            state_names[q_leaf]   = "leaf";
+        }
+
+        return result;
+    }
+
+    if (name == Predefined_WTT_Names::HAMILTONIAN_H_STAGE) {
+        ACN     invsqrt =  ACN::ONE_OVER_SQRT2();
+        ACN neg_invsqrt = -ACN::ONE_OVER_SQRT2();
+
+        WTT result = construct_stage_for_hamiltonian(invsqrt, invsqrt, invsqrt, neg_invsqrt);
+
+        return result;
+    }
+
+    if (name == Predefined_WTT_Names::HAMILTONIAN_SQRT_X_STAGE) {
+        ACN ll (1, 0,  1, 0, 2);
+        ACN lr (1, 0, -1, 0, 2);
+        ACN rl (1, 0, -1, 0, 2);
+        ACN rr (1, 0,  1, 0, 2);
+
+        WTT result = construct_stage_for_hamiltonian(ll, lr, rl, rr);
+
+        return result;
+    }
+
+    if (name == Predefined_WTT_Names::HAMILTONIAN_S_STAGE) {
+        ACN ll (1, 0,  0, 0, 0);
+        ACN lr = ACN::ZERO();
+        ACN rl = ACN::ZERO();;
+        ACN rr (0, 0,  1, 0, 0); // Complex unit
+
+        WTT result = construct_stage_for_hamiltonian(ll, lr, rl, rr);
+
+        return result;
+    }
+    if (name == Predefined_WTT_Names::HAMILTONIAN_RZZ) {
+        WTT cnot = get_predefined_wtt(Predefined_WTT_Names::HAMILTONIAN_BC_CNOT, swta_metadata);
+        WTT rz   = get_predefined_wtt(Predefined_WTT_Names::HAMILTONIAN_BC_RZ, swta_metadata);
+
+        WTT rzz_box12 = compose_wtts_sequentially(cnot, rz);
+        WTT rzz_box   = compose_wtts_sequentially(rzz_box12, cnot);
+
+        return rzz_box;
+    }
+
+    if (name == Predefined_WTT_Names::HAMILTONIAN_RXX) {
+        WTT hadamard = get_predefined_wtt(Predefined_WTT_Names::HAMILTONIAN_BC_H, swta_metadata);
+        WTT rzz_box  = get_predefined_wtt(Predefined_WTT_Names::HAMILTONIAN_RZZ, swta_metadata);
+
+        WTT rxx_box12 = compose_wtts_sequentially(hadamard, rzz_box);
+        WTT rxx_box   = compose_wtts_sequentially(rxx_box12, hadamard);
+        return rxx_box;
+    }
+
+    if (name == Predefined_WTT_Names::HAMILTONIAN_RYY) {
+        WTT s        = get_predefined_wtt(Predefined_WTT_Names::HAMILTONIAN_BC_S, swta_metadata);
+        WTT rxx_box  = get_predefined_wtt(Predefined_WTT_Names::HAMILTONIAN_RXX, swta_metadata);
+
+        WTT ryy_box12 = compose_wtts_sequentially(s, rxx_box);
+        WTT ryy_box   = compose_wtts_sequentially(ryy_box12, s);
+        return ryy_box;
+    }
+
+    if (name == Predefined_WTT_Names::HAMILTONIAN_UZZ) {
+        WTT rzz_box  = get_predefined_wtt(Predefined_WTT_Names::HAMILTONIAN_RZZ, swta_metadata);
+        WTT x_component = get_predefined_wtt(Predefined_WTT_Names::HAMILTONIAN_BC_X, swta_metadata);
+        WTT uzz_box = compose_wtts_sequentially(rzz_box, x_component);
+        return uzz_box;
+    }
+
+    if (name == Predefined_WTT_Names::HAMILTONIAN_LAST_X_STAGE) {
+        State q_wait  = 0;
+        State q_apply = 1;
+        State q_leaf  = 2;
+
+        u64 number_of_states = 3;
+
+        Internal_Symbol working_qubit      = 0;
+        Internal_Symbol working_qubit_stop = 1;
+
+        SWTA::Metadata metadata = { .number_of_internal_symbols = 2, .number_of_colors = 1 };
+        WTT_Builder builder (metadata);
+
+        builder.mark_state_initial(q_wait);
+        builder.mark_state_final(q_leaf);
+
+        Def_Coef one          (ACN::ONE());
+
+        {
+             DLF left_subtree  { one * q_wait * Subtree_Tag::LEFT };
+             DLF right_subtree { one * q_wait * Subtree_Tag::RIGHT };
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(q_wait, working_qubit, transition);
+        }
+
+        {
+             DLF left_subtree  { one * q_apply * Subtree_Tag::LEFT };
+             DLF right_subtree { one * q_apply * Subtree_Tag::RIGHT };
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(q_wait, working_qubit_stop, transition);
+        }
+
+        {
+             DLF left_subtree  { one * q_leaf * Subtree_Tag::RIGHT };
+             DLF right_subtree { one * q_leaf * Subtree_Tag::LEFT  };
+             auto transition = synthetize_wtt_transition(left_subtree, right_subtree);
+             builder.add_transition(q_apply, working_qubit, transition);
+        }
+
+        WTT result = builder.build(number_of_states);
+
+        if (DEBUG) {
+            result.debug_data = new WTT::Debug_Data;
+            auto& state_names = result.debug_data->state_names;
+
+            state_names[q_wait]  = "wait";
+            state_names[q_apply] = "apply-swap";
+            state_names[q_leaf]  = "leaf";
+        }
+
+        return result;
+    }
 
     throw std::runtime_error("Unknown WTT. " + std::to_string(static_cast<u64>(name)));
 }
@@ -2340,6 +2734,64 @@ SWTA get_predefined_swta(Predefined_SWTA_Names name) {
             state_names[q_00_anc_init] = "q_00_anc_init";
             state_names[q_00_w_init]   = "q_00_w_init";
             state_names[q_10_w_init]   = "q_10_w_init";
+        });
+
+        return result;
+    }
+
+    if (name == Predefined_SWTA_Names::HAMILTONIAN_ALL_BASIS) {
+        State q_loop      = 0;
+        State q_loop_last = 1;
+        State q_leaf      = 2;
+
+        u64 number_of_states = 3;
+
+        Internal_Symbol working_qubit      = 0;
+        Internal_Symbol working_qubit_stop = 1;
+
+        Color color_L = 0;
+        Color color_R = 1;
+
+        SWTA::Metadata metadata = { .number_of_internal_symbols = 2, .number_of_colors = 2 };
+
+        SWTA::Transition_Builder builder (metadata);
+
+        Def_Coef one  (ACN::ONE());
+        Def_Coef zero (ACN::ZERO());
+
+        auto add_transition = [&builder, &working_qubit](State source, Color color, const Def_Linear_Form& left_successor, const Def_Linear_Form& right_successor) {
+             DLF left_subtree  { left_successor };
+             DLF right_subtree { right_successor };
+             auto transition = synthetize_swta_transition(left_subtree, right_subtree);
+             builder.add_transition(source, working_qubit, color, transition);
+        };
+
+        auto add_stop_transition = [&builder, &working_qubit_stop](State source, Color color, const Def_Linear_Form& left_successor, const Def_Linear_Form& right_successor) {
+             DLF left_subtree  { left_successor };
+             DLF right_subtree { right_successor };
+             auto transition = synthetize_swta_transition(left_subtree, right_subtree);
+             builder.add_transition(source, working_qubit_stop, color, transition);
+        };
+
+        add_transition(q_loop, color_L, one*q_loop, zero*q_loop);
+        add_transition(q_loop, color_R, zero*q_loop, one*q_loop);
+
+        add_stop_transition(q_loop, color_L, one*q_loop_last, zero*q_loop_last);
+        add_stop_transition(q_loop, color_R, zero*q_loop_last, one*q_loop_last);
+
+        add_transition(q_loop_last, color_L, one*q_leaf, zero*q_leaf);
+        add_transition(q_loop_last, color_R, zero*q_leaf, one*q_leaf);
+
+        std::vector<State> initial_states ({q_loop});
+        Bit_Set leaf_states (number_of_states, { q_leaf });
+        auto transition_fn = builder.build(number_of_states);
+        SWTA result (transition_fn, initial_states, leaf_states);
+
+        do_on_debug({
+            result.debug_data = new SWTA::Debug_Data();
+            result.debug_data->state_names[q_loop] = "q_loop";
+            result.debug_data->state_names[q_leaf] = "leaf";
+            result.debug_data->state_names[q_loop_last] = "last_bit";
         });
 
         return result;

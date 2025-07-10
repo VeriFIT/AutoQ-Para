@@ -31,6 +31,22 @@ enum class Predefined_WTT_Names : u64 {
     ECC_BOX1 = 40,
     ECC_BOX2 = 41,
 
+    HAMILTONIAN_BC_CNOT = 50,
+    HAMILTONIAN_BC_RZ   = 51,
+    HAMILTONIAN_BC_H    = 52,
+    HAMILTONIAN_BC_S    = 53,
+    HAMILTONIAN_BC_X    = 54,
+
+    HAMILTONIAN_RZZ = 60,
+    HAMILTONIAN_RXX = 61,
+    HAMILTONIAN_RYY = 62,
+    HAMILTONIAN_UZZ = 63,
+
+    HAMILTONIAN_H_STAGE      = 64,
+    HAMILTONIAN_S_STAGE      = 65,
+    HAMILTONIAN_SQRT_X_STAGE = 66,
+    HAMILTONIAN_LAST_X_STAGE = 67,
+
     TEST_FIXED_ID1 = 100
 };
 
@@ -54,6 +70,8 @@ enum class Predefined_SWTA_Names : u64 {
 
     ECC_PRE        = 20,
     ECC_POST       = 21,
+
+    HAMILTONIAN_ALL_BASIS = 30,
 };
 
 struct Def_State;
