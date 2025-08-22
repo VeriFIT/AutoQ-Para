@@ -11,7 +11,7 @@ qubit[n] q;
 h q[0];
 
 for uint i in [0:n-2] {
-	cx q[i], q[i+1]
+	cx q[i], q[i+1];
 }
 
 // post: q == 1/sqrt(2) * (|0...00> + |1...11>)
