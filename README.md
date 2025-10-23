@@ -1,5 +1,5 @@
 # AutoQ-Para 
-A tool for parametrized verification of quantum circuits using the Synchronized Weighted Tree Automata (SWTAs)
+A tool for parametrized verification of quantum circuits using the Synchronized Weighted Tree Automata (SWTAs).
 
 ## Building and running
 In order to streamline the build process, we provide a container file
@@ -14,4 +14,4 @@ podman run --rm swta-impl
 To see the list of dependencies for modifying the tool, see `Dockerfile`.
 
 ## Publications
-- POPL'26 (Link: TBD)
+- [P. Abdulla, Y. Chen, M. Hečko, L. Holík, O. Lengál, J. Lin, R. Srinivasan. Parameterized Verification of Quantum Circuits. (POPL'26)](https://popl26.sigplan.org/)
