@@ -2560,28 +2560,28 @@ SWTA get_predefined_swta(Predefined_SWTA_Names name) {
         add_transition(q_anc_init, color_LL, one*q_w_init, zero*q_w_init); // Ancillas are initialized to zero
         add_transition(s_anc_init, color_LL, one*s_w_init, zero*s_w_init);
 
-        add_transition(q_w_init, color_LL, one*q_anc, zero*q_anc);
+        // add_transition(q_w_init, color_LL, one*q_anc, zero*q_anc);
         add_transition(q_w_init, color_LR, one*q_anc, zero*q_anc);
         add_transition(q_w_init, color_RL, zero*q_anc, one*q_anc);
-        add_transition(q_w_init, color_RR, zero*q_anc, one*q_anc);
+        // add_transition(q_w_init, color_RR, zero*q_anc, one*q_anc);
 
-        add_transition(s_w_init, color_LL, one*s_anc, zero*s_anc);
+        // add_transition(s_w_init, color_LL, one*s_anc, zero*s_anc);
         add_transition(s_w_init, color_LR, zero*s_anc, one*s_anc);
         add_transition(s_w_init, color_RL, one*s_anc, zero*s_anc);
-        add_transition(s_w_init, color_RR, zero*s_anc, one*s_anc);
+        // add_transition(s_w_init, color_RR, zero*s_anc, one*s_anc);
 
         add_transition(q_anc, color_LL, one*q_w, zero*q_w);
         add_transition(s_anc, color_LL, one*s_w, zero*s_w);
 
-        add_transition(q_w, color_LL, one*q_anc, zero*q_anc);
+        // add_transition(q_w, color_LL, one*q_anc, zero*q_anc);
         add_transition(q_w, color_LR, one*q_anc, zero*q_anc);
         add_transition(q_w, color_RL, zero*q_anc, one*q_anc);
-        add_transition(q_w, color_RR, zero*q_anc, one*q_anc);
+        // add_transition(q_w, color_RR, zero*q_anc, one*q_anc);
 
-        add_transition(s_w, color_LL, one*s_anc, zero*s_anc);
+        // add_transition(s_w, color_LL, one*s_anc, zero*s_anc);
         add_transition(s_w, color_LR, zero*s_anc, one*s_anc);
         add_transition(s_w, color_RL, one*s_anc, zero*s_anc);
-        add_transition(s_w, color_RR, zero*s_anc, one*s_anc);
+        // add_transition(s_w, color_RR, zero*s_anc, one*s_anc);
 
         add_stop_transition(q_anc_init, color_LL, one*q_w_init, zero*q_w_init);
         add_stop_transition(s_anc_init, color_LL, one*s_w_init, zero*s_w_init);
@@ -2668,41 +2668,41 @@ SWTA get_predefined_swta(Predefined_SWTA_Names name) {
         add_transition(s_00_anc_init, color_LL, one*s_00_w_init, zero*s_00_w_init);
         add_transition(s_01_anc_init, color_LL, one*s_10_w_init, zero*s_00_w_init);
 
-        add_transition(q_00_w_init, color_LL, one*q_00_anc, zero*q_11_anc);
+        // add_transition(q_00_w_init, color_LL, one*q_00_anc, zero*q_11_anc);
         add_transition(q_00_w_init, color_LR, one*q_00_anc, zero*q_11_anc);
         add_transition(q_00_w_init, color_RL, zero*q_00_anc, one*q_11_anc);
-        add_transition(q_00_w_init, color_RR, zero*q_00_anc, one*q_11_anc);
-        add_transition(q_10_w_init, color_LL, one*q_10_anc, zero*q_01_anc);
+        // add_transition(q_00_w_init, color_RR, zero*q_00_anc, one*q_11_anc);
+        // add_transition(q_10_w_init, color_LL, one*q_10_anc, zero*q_01_anc);
         add_transition(q_10_w_init, color_LR, one*q_10_anc, zero*q_01_anc);
         add_transition(q_10_w_init, color_RL, zero*q_10_anc, one*q_01_anc);
-        add_transition(q_10_w_init, color_RR, zero*q_10_anc, one*q_01_anc);
+        // add_transition(q_10_w_init, color_RR, zero*q_10_anc, one*q_01_anc);
 
-        add_transition(s_00_w_init, color_LL, one*s_00_anc,  zero*s_11_anc);
+        // add_transition(s_00_w_init, color_LL, one*s_00_anc,  zero*s_11_anc);
         add_transition(s_00_w_init, color_LR, zero*s_00_anc, one*s_11_anc);
         add_transition(s_00_w_init, color_RL, one*s_00_anc,  zero*s_11_anc);
-        add_transition(s_00_w_init, color_RR, zero*s_00_anc, one*s_11_anc);
-        add_transition(s_10_w_init, color_LL, one*s_10_anc, zero*s_01_anc);
+        // add_transition(s_00_w_init, color_RR, zero*s_00_anc, one*s_11_anc);
+        // add_transition(s_10_w_init, color_LL, one*s_10_anc, zero*s_01_anc);
         add_transition(s_10_w_init, color_LR, zero*s_10_anc, one*s_01_anc);
         add_transition(s_10_w_init, color_RL, one*s_10_anc, zero*s_01_anc);
-        add_transition(s_10_w_init, color_RR, zero*s_10_anc, one*s_01_anc);
+        // add_transition(s_10_w_init, color_RR, zero*s_10_anc, one*s_01_anc);
 
-        add_transition(q_00_w, color_LL, one*q_00_anc, zero*q_11_anc);
+        // add_transition(q_00_w, color_LL, one*q_00_anc, zero*q_11_anc);
         add_transition(q_00_w, color_LR, one*q_00_anc, zero*q_11_anc);
         add_transition(q_00_w, color_RL, zero*q_00_anc, one*q_11_anc);
-        add_transition(q_00_w, color_RR, zero*q_00_anc, one*q_11_anc);
-        add_transition(q_10_w, color_LL, one*q_10_anc, zero*q_01_anc);
+        // add_transition(q_00_w, color_RR, zero*q_00_anc, one*q_11_anc);
+        // add_transition(q_10_w, color_LL, one*q_10_anc, zero*q_01_anc);
         add_transition(q_10_w, color_LR, one*q_10_anc, zero*q_01_anc);
         add_transition(q_10_w, color_RL, zero*q_10_anc, one*q_01_anc);
-        add_transition(q_10_w, color_RR, zero*q_10_anc, one*q_01_anc);
+        // add_transition(q_10_w, color_RR, zero*q_10_anc, one*q_01_anc);
 
-        add_transition(s_00_w, color_LL, one*s_00_anc, zero*s_11_anc);
+        // add_transition(s_00_w, color_LL, one*s_00_anc, zero*s_11_anc);
         add_transition(s_00_w, color_LR, zero*s_00_anc, one*s_11_anc);
         add_transition(s_00_w, color_RL, one*s_00_anc, zero*s_11_anc);
-        add_transition(s_00_w, color_RR, zero*s_00_anc, one*s_11_anc);
-        add_transition(s_10_w, color_LL, one*s_10_anc, zero*s_01_anc);
+        // add_transition(s_00_w, color_RR, zero*s_00_anc, one*s_11_anc);
+        // add_transition(s_10_w, color_LL, one*s_10_anc, zero*s_01_anc);
         add_transition(s_10_w, color_LR, zero*s_10_anc, one*s_01_anc);
         add_transition(s_10_w, color_RL, one*s_10_anc, zero*s_01_anc);
-        add_transition(s_10_w, color_RR, zero*s_10_anc, one*s_01_anc);
+        // add_transition(s_10_w, color_RR, zero*s_10_anc, one*s_01_anc);
 
         add_transition(q_00_anc, color_LL,  one*q_00_w, zero*q_00_w);
         add_transition(q_01_anc, color_LL,  one*q_10_w, zero*q_10_w);
