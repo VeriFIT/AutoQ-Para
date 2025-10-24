@@ -14,4 +14,4 @@ podman run --rm swta-impl
 To see the list of dependencies for modifying the tool, see `Dockerfile`.
 
 ## Publications
-- [P. Abdulla, Y. Chen, M. Hečko, L. Holík, O. Lengál, J. Lin, R. Srinivasan. Parameterized Verification of Quantum Circuits. (POPL'26)](https://popl26.sigplan.org/)
+- [P. Abdulla, Y. Chen, M. Hečko, L. Holík, O. Lengál, J. Lin, R. S. Thinniyam. Parameterized Verification of Quantum Circuits. (POPL'26)](https://popl26.sigplan.org/)
