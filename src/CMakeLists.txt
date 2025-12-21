@@ -17,6 +17,7 @@ project(
 )
 
 add_library(acn STATIC arith.cpp)
+add_library(swta STATIC arith.cpp weighted_automata.cpp swta.cpp predefined_automata.cpp bit_set.cpp nfa.cpp swta_builders.cpp quantum_program.cpp)
 add_executable(experiments experiments.cpp arith.cpp weighted_automata.cpp swta.cpp predefined_automata.cpp bit_set.cpp nfa.cpp swta_builders.cpp quantum_program.cpp)
 
 target_link_libraries(experiments PRIVATE acn gmp)
