@@ -106,8 +106,8 @@ bool extend_form_with_product_and_note_discoveries(const Staircase_State& source
             }
 
             // It might be that post is (Leaf, State) and due to the offset, we should be already starting a new instance in place of the Leaf
-            bool is_first_leaf = state.first_nth_qubit == ctx.box_inputs.size(); 
-            bool should_we_start_new_instance_right_away = (state.second_nth_qubit == ctx.box_offset); 
+            bool is_first_leaf = state.first_nth_qubit == ctx.box_inputs.size();
+            bool should_we_start_new_instance_right_away = (state.second_nth_qubit == ctx.box_offset);
             if (is_first_leaf && should_we_start_new_instance_right_away) {
                 state.first = state.second;
                 state.first_nth_qubit = state.second_nth_qubit;
@@ -117,7 +117,7 @@ bool extend_form_with_product_and_note_discoveries(const Staircase_State& source
 
                 did_restart_happen = true;
             }
-            
+
             // if (state.first_nth_qubit == ctx.box_inputs.size()) { // The first state is a leaf state
             //     assert (ctx.box.states_with_leaf_transitions.get_bit_value(state.first));
             //     state.first  = state.second;
@@ -369,5 +369,140 @@ WTT perform_staircase_construction(WTT& box, const std::vector<Internal_Symbol>&
         }
     });
 
+    return result;
+}
+
+struct Transducer_Path {
+    // Note: we use these enums to not get confused which parameter is left, and which is right
+    enum class Input_Direction : int {
+        LEFT = 0,
+        RIGHT = 1
+    };
+
+    enum class Output_Direction : int {
+        LEFT = 0,
+        RIGHT = 1
+    };
+
+    u64 handle;
+    std::vector<int> input_path;  // Encodes what inputs are currently available
+    std::vector<int> output_path; // Encodes the basis in the output tree
+
+    size_t size() const {
+        return input_path.size();
+    }
+
+    void extend(Input_Direction input_direction, Output_Direction output_direction) {
+        input_path.push_back(static_cast<int>(input_direction));
+        output_path.push_back(static_cast<int>(output_direction));
+    }
+
+    void pop() {
+        input_path.pop_back();
+        output_path.pop_back();
+    }
+};
+
+WTT build_from_matrix(ACN_Matrix& matrix) {
+    int qubit_cnt = std::sqrtl(matrix.width);
+
+    SWTA::Metadata metadata = {.number_of_internal_symbols = 1, .number_of_colors = 1};
+    WTT_Builder builder(metadata);
+
+    State root = 0;
+    State leaf = 1;
+    int state_counter = 2;
+
+    builder.mark_state_initial(root);
+    builder.mark_state_final(leaf);
+
+    auto compute_matrix_cell = [](std::vector<int>& address) {
+        int cell = 0;
+        for (int bit : address) {
+            cell <<= 1LL;
+            cell += bit;
+        }
+        return cell;
+    };
+
+    auto populate_linear_form_from_final_path = [&matrix, &compute_matrix_cell, &leaf](Transducer_Path& path,
+                                                                                       Transducer_Path::Input_Direction input_direction,
+                                                                                       Transducer_Path::Output_Direction output_direction,
+                                                                                       Linear_Form& form)
+    {
+        path.extend(input_direction, output_direction);
+        int matrix_row    = compute_matrix_cell(path.output_path);
+        int matrix_column = compute_matrix_cell(path.input_path);
+
+        auto& coef = matrix.at(matrix_row, matrix_column);
+        form.components.push_back({coef, leaf});
+        path.pop();
+    };
+
+    std::vector<Transducer_Path> worklist;
+    Transducer_Path seed {.handle = root};
+    worklist.push_back(seed);
+
+    while (!worklist.empty()) {
+        auto current_path = worklist.back();
+        worklist.pop_back();
+
+        // We have seen all but the last qubit. So, with the last qubit, we can emit the final number
+        // that should make the result.
+        if (current_path.size() == qubit_cnt - 1) {
+            Linear_Form ll, lr, rl, rr;
+
+            populate_linear_form_from_final_path(current_path,
+                                                 Transducer_Path::Input_Direction::LEFT,
+                                                 Transducer_Path::Output_Direction::LEFT,
+                                                 ll);
+
+            populate_linear_form_from_final_path(current_path,
+                                                 Transducer_Path::Input_Direction::LEFT,
+                                                 Transducer_Path::Output_Direction::RIGHT,
+                                                 rl);
+
+            populate_linear_form_from_final_path(current_path,
+                                                 Transducer_Path::Input_Direction::RIGHT,
+                                                 Transducer_Path::Output_Direction::LEFT,
+                                                 lr);
+
+            populate_linear_form_from_final_path(current_path,
+                                                 Transducer_Path::Input_Direction::RIGHT,
+                                                 Transducer_Path::Output_Direction::RIGHT,
+                                                 rr);
+
+            WTT::Transition transition (ll, lr, rl, rr);
+            auto internal_symbol = metadata.get_ith_internal_symbol(qubit_cnt);
+            builder.add_transition(current_path.handle, internal_symbol, transition);
+            continue;
+        }
+
+        auto extend_path = [&current_path, &state_counter, &worklist](Transducer_Path::Input_Direction input_direction,
+                                                           Transducer_Path::Output_Direction output_direction) {
+            Transducer_Path path (current_path);
+            path.extend(input_direction, output_direction);
+            path.handle = (state_counter++);
+
+            worklist.push_back(path);
+
+            Linear_Form::Component target (Algebraic_Complex_Number::ONE(), path.handle);
+            Linear_Form linear_form ({ target });
+
+            return linear_form;
+        };
+
+        Linear_Form ll = extend_path(Transducer_Path::Input_Direction::LEFT, Transducer_Path::Output_Direction::LEFT);
+        Linear_Form lr = extend_path(Transducer_Path::Input_Direction::RIGHT, Transducer_Path::Output_Direction::LEFT);
+        Linear_Form rl = extend_path(Transducer_Path::Input_Direction::LEFT, Transducer_Path::Output_Direction::RIGHT);
+        Linear_Form rr = extend_path(Transducer_Path::Input_Direction::RIGHT, Transducer_Path::Output_Direction::RIGHT);
+
+        WTT::Transition transition(ll, lr, rl, rr);
+
+        auto internal_symbol = metadata.get_ith_internal_symbol(current_path.size());
+        builder.add_transition(current_path.handle, internal_symbol, transition);
+    }
+
+    auto result = builder.build(state_counter);
     return result;
 }

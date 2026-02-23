@@ -65,6 +65,13 @@ struct SWTA {
     struct Metadata {
         u64 number_of_internal_symbols;
         u64 number_of_colors;
+
+        std::vector<int> internal_symbols;
+
+        int get_ith_internal_symbol(int internal_symbol_idx) {
+            if (internal_symbol_idx >= internal_symbols.size()) return 0;
+            return internal_symbols.at(internal_symbol_idx);
+        }
     };
 
     /**
